@@ -196,6 +196,38 @@ function parsePattern(pattern: string): Array<Token> {
   return tokens
 }
 
+/**
+ * Try to match a decoded literal against an encoded input segment.
+ * Returns the number of raw input characters consumed, or -1 on failure.
+ */
+function findEncodedLiteralEnd(
+  input: string,
+  position: number,
+  literal: string,
+): number {
+  // Each encoded byte (%XX) takes 3 chars vs 1 decoded. The encoded
+  // segment can be at most 3x the literal length.
+  const maxLength = Math.min(input.length - position, literal.length * 3)
+
+  for (let length = literal.length; length <= maxLength; length++) {
+    const segment = input.slice(position, position + length)
+    const decoded = decode(segment)
+
+    if (decoded === literal) {
+      return length
+    }
+
+    // Only abort if a successful decode produced something longer
+    // than the literal. Failed decodes return the raw string which
+    // may be longer due to unresolved %XX sequences.
+    if (decoded.length > literal.length && decoded !== segment) {
+      return -1
+    }
+  }
+
+  return -1
+}
+
 function matchTokens(inputString: string, tokens: Array<Token>): MatchResult {
   const inputLength = inputString.length
 
@@ -207,12 +239,28 @@ function matchTokens(inputString: string, tokens: Array<Token>): MatchResult {
     const token = tokens[i]
 
     if (token.type === TokenType.Literal) {
-      if (!inputString.startsWith(token.value, position)) {
-        return NO_MATCH
+      if (inputString.startsWith(token.value, position)) {
+        position += token.value.length
+        continue
       }
 
-      position += token.value.length
-      continue
+      // The input may be URL-encoded. Try decoding the corresponding
+      // input segment to see if it matches the literal. Only attempt
+      // this when the remaining input contains a '%'.
+      if (inputString.indexOf('%', position) !== -1) {
+        const encodedLength = findEncodedLiteralEnd(
+          inputString,
+          position,
+          token.value,
+        )
+
+        if (encodedLength !== -1) {
+          position += encodedLength
+          continue
+        }
+      }
+
+      return NO_MATCH
     }
 
     // Wildcard or param — use precomputed nextLiteral.
@@ -264,9 +312,11 @@ function matchTokens(inputString: string, tokens: Array<Token>): MatchResult {
     }
 
     if (token.type === TokenType.Wildcard) {
-      params[String(wildcardIndex++)] = inputString.slice(position, endPosition)
+      params[String(wildcardIndex++)] = decode(
+        inputString.slice(position, endPosition),
+      )
     } else if (position !== endPosition) {
-      const captured = inputString.slice(position, endPosition)
+      const captured = decode(inputString.slice(position, endPosition))
       const existing = params[token.name]
 
       if (existing !== undefined) {
@@ -298,15 +348,15 @@ function removeQueryString(input: string): string {
   return queryIndex === -1 ? input : input.slice(0, queryIndex)
 }
 
-function decodeInput(input: string): string {
-  if (input.indexOf('%') === -1) {
-    return input
+function decode(value: string): string {
+  if (value.indexOf('%') === -1) {
+    return value
   }
 
   try {
-    return decodeURIComponent(input)
+    return decodeURIComponent(value)
   } catch {
-    return input
+    return value
   }
 }
 
@@ -320,14 +370,15 @@ export function matchPattern(
   input: MatchPatternInput,
   pattern: string,
 ): MatchResult {
-  const inputString = decodeInput(
-    removeQueryString(typeof input === 'string' ? input : input.href),
+  const inputString = removeQueryString(
+    typeof input === 'string' ? input : input.href,
   )
   const { tokens, isLiteralOnly } = parsePatternOrGetFromCache(pattern)
 
   // Pure literal patterns are just a string equality check.
+  // Try raw first, then decoded (for encoded inputs like %C3%A9 vs é).
   if (isLiteralOnly) {
-    return inputString === pattern
+    return inputString === pattern || decode(inputString) === pattern
       ? { matches: true, params: Object.create(null) }
       : NO_MATCH
   }

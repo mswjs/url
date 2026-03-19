@@ -250,6 +250,11 @@ it.each<
     'http://localhost/café/:section',
     MATCHES_WITH_PARAMS({ section: 'menu' }),
   ],
+  [
+    `http://localhost/redirect/${encodeURIComponent('http://example.com:5001/example')}`,
+    'http://localhost/redirect/:url',
+    MATCHES_WITH_PARAMS({ url: 'http://example.com:5001/example' }),
+  ],
 
   /* Escaped characters in pattern */
   ['/users/*', '/users/\\*', MATCHES_WITHOUT_PARAMS],
