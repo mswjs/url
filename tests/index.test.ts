@@ -175,6 +175,11 @@ it.each<
     'http://localhost/:param?/settings',
     MATCHES_WITHOUT_PARAMS,
   ],
+  [
+    'http://localhost/user',
+    'http://localhost/user/:id?',
+    MATCHES_WITHOUT_PARAMS,
+  ],
 
   /* One or more path parameter (+) */
   [
@@ -313,7 +318,11 @@ it.each<
   [new URL('http://localhost'), 'http://localhost/', MATCHES_WITHOUT_PARAMS],
   [new URL('http://localhost/'), 'http://localhost', MATCHES_WITHOUT_PARAMS],
   [new URL('http://localhost/'), 'http://localhost/', MATCHES_WITHOUT_PARAMS],
-  [new URL('http://localhost/user/'), 'http://localhost/user', MATCHES_WITHOUT_PARAMS],
+  [
+    new URL('http://localhost/user/'),
+    'http://localhost/user',
+    MATCHES_WITHOUT_PARAMS,
+  ],
   [
     new URL('http://localhost/user/'),
     'http://localhost/user/',

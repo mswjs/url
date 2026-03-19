@@ -273,6 +273,27 @@ function matchTokens(
         }
       }
 
+      // If this literal ends with '/' and the only remaining token is
+      // an optional/zero-or-more param, try matching without the trailing
+      // slash. This allows `/users` to match pattern `/users/:id?`.
+      if (
+        token.value.charCodeAt(token.value.length - 1) === SLASH &&
+        i + 1 === tokens.length - 1
+      ) {
+        const nextToken = tokens[i + 1]
+        if (
+          nextToken.type === TokenType.Param &&
+          (nextToken.modifier === '?' || nextToken.modifier === '*')
+        ) {
+          const trimmed = token.value.slice(0, -1)
+          if (inputString.startsWith(trimmed, position)) {
+            position += trimmed.length
+            i++
+            continue
+          }
+        }
+      }
+
       return NO_MATCH
     }
 
