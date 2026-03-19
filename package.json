@@ -10,6 +10,9 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
+    "@remix-run/route-pattern": "^0.19.0",
+    "find-my-way": "^9.5.0",
+    "path-to-regexp": "^8.3.0",
     "vitest": "^4.1.0"
   }
 }

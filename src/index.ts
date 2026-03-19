@@ -40,6 +40,44 @@ function isIdentCharCode(code: number): boolean {
   return isIdentStartCode(code) || (code >= 48 && code <= 57)
 }
 
+interface ParsedPattern {
+  tokens: Array<Token>
+  isLiteralOnly: boolean
+}
+
+const NO_MATCH: MatchResult = Object.freeze({
+  matches: false,
+  params: Object.freeze({}),
+}) as MatchResult
+
+const PATTERN_CACHE_LIMIT = 1000
+const patternCache = new Map<string, ParsedPattern>()
+
+function getParsedPattern(pattern: string): ParsedPattern {
+  let parsed = patternCache.get(pattern)
+
+  if (parsed === undefined) {
+    const tokens = parsePattern(pattern)
+    let isLiteralOnly = true
+
+    for (let i = 0; i < tokens.length; i++) {
+      if (tokens[i].type !== TokenType.Literal) {
+        isLiteralOnly = false
+        break
+      }
+    }
+
+    if (patternCache.size >= PATTERN_CACHE_LIMIT) {
+      patternCache.delete(patternCache.keys().next().value!)
+    }
+
+    parsed = { tokens, isLiteralOnly }
+    patternCache.set(pattern, parsed)
+  }
+
+  return parsed
+}
+
 function parsePattern(pattern: string): Array<Token> {
   const tokens: Array<Token> = []
   let i = 0
@@ -140,10 +178,7 @@ function matchTokens(inputString: string, tokens: Array<Token>): MatchResult {
 
     if (token.type === TokenType.Literal) {
       if (!inputString.startsWith(token.value, position)) {
-        return {
-          matches: false,
-          params: {},
-        }
+        return NO_MATCH
       }
 
       position += token.value.length
@@ -166,10 +201,7 @@ function matchTokens(inputString: string, tokens: Array<Token>): MatchResult {
         ) {
           endPosition = position
         } else {
-          return {
-            matches: false,
-            params: {},
-          }
+          return NO_MATCH
         }
       } else {
         endPosition = idx
@@ -182,10 +214,7 @@ function matchTokens(inputString: string, tokens: Array<Token>): MatchResult {
       (token.modifier === '?' || token.modifier === '*')
 
     if (!allowEmpty && position === endPosition) {
-      return {
-        matches: false,
-        params: {},
-      }
+      return NO_MATCH
     }
 
     if (token.type === TokenType.Wildcard) {
@@ -209,10 +238,7 @@ function matchTokens(inputString: string, tokens: Array<Token>): MatchResult {
   }
 
   if (position !== inputLength) {
-    return {
-      matches: false,
-      params: {},
-    }
+    return NO_MATCH
   }
 
   return {
@@ -226,5 +252,12 @@ export function matchPattern(
   pattern: string,
 ): MatchResult {
   const inputString = typeof input === 'string' ? input : input.href
-  return matchTokens(inputString, parsePattern(pattern))
+  const { tokens, isLiteralOnly } = getParsedPattern(pattern)
+
+  // Pure literal patterns are just a string equality check.
+  if (isLiteralOnly) {
+    return inputString === pattern ? { matches: true, params: {} } : NO_MATCH
+  }
+
+  return matchTokens(inputString, tokens)
 }
