@@ -283,6 +283,12 @@ function removeQueryString(input: string): string {
   return queryIndex === -1 ? input : input.slice(0, queryIndex)
 }
 
+/**
+ * Match a URL against the given pattern.
+ * @example
+ * matchPattern('http://localhost/user/123', 'http://localhost/user/:userId')
+ * // { matches: true, params: { userId: '123' } }
+ */
 export function matchPattern(
   input: MatchPatternInput,
   pattern: string,
