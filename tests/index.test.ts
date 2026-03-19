@@ -208,12 +208,10 @@ it.each<
     'http://localhost/user/*',
     MATCHES_WITH_PARAMS({ '0': '123' }),
   ],
-  [new URL('http://localhost'), 'http://localhost', MATCHES_WITHOUT_PARAMS],
+  [new URL('http://localhost'), 'http://localhost', NO_MATCH],
   [new URL('http://localhost'), 'http://localhost/', MATCHES_WITHOUT_PARAMS],
-  [new URL('http://localhost/'), 'http://localhost', MATCHES_WITHOUT_PARAMS],
+  [new URL('http://localhost/'), 'http://localhost', NO_MATCH],
   [new URL('http://localhost/'), 'http://localhost/', MATCHES_WITHOUT_PARAMS],
-
-  /* URL instance: trailing slash does NOT become optional for non-root paths */
   [new URL('http://localhost/user/'), 'http://localhost/user', NO_MATCH],
   [
     new URL('http://localhost/user/'),
