@@ -14,6 +14,7 @@
     "start": "tsdown -w",
     "lint": "publint",
     "test": "vitest",
+    "bench": "vitest bench",
     "build": "tsdown"
   },
   "files": [

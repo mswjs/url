@@ -229,6 +229,36 @@ it.each<
     MATCHES_WITH_PARAMS({ param: 'bad%encoding' }),
   ],
 
+  /* URL-encoded literal matching */
+  [
+    'http://localhost/caf%C3%A9',
+    'http://localhost/café',
+    MATCHES_WITHOUT_PARAMS,
+  ],
+  [
+    'http://localhost/hello%20world',
+    'http://localhost/hello world',
+    MATCHES_WITHOUT_PARAMS,
+  ],
+  [
+    'http://localhost/%E4%B8%AD%E6%96%87/posts',
+    'http://localhost/中文/posts',
+    MATCHES_WITHOUT_PARAMS,
+  ],
+  [
+    'http://localhost/caf%C3%A9/menu',
+    'http://localhost/café/:section',
+    MATCHES_WITH_PARAMS({ section: 'menu' }),
+  ],
+
+  /* Escaped characters in pattern */
+  ['/users/*', '/users/\\*', MATCHES_WITHOUT_PARAMS],
+  ['/users/abc', '/users/\\*', NO_MATCH],
+  ['/users/:id', '/users/\\:id', MATCHES_WITHOUT_PARAMS],
+  ['/users/123', '/users/\\:id', NO_MATCH],
+  ['/users/a\\b', '/users/a\\\\b', MATCHES_WITHOUT_PARAMS],
+  ['/path/to/*.txt', '/path/to/\\*.:ext', MATCHES_WITH_PARAMS({ ext: 'txt' })],
+
   /* Relative URLs (path-only) */
   ['/users/settings', '/users/settings', MATCHES_WITHOUT_PARAMS],
   ['/users/settings', '/users/other', NO_MATCH],
@@ -285,5 +315,5 @@ it.each<
     MATCHES_WITHOUT_PARAMS,
   ],
 ])('matches %j against %j', (input, pattern, expectedResult) => {
-  expect(matchPattern(input, pattern)).toStrictEqual(expectedResult)
+  expect(matchPattern(input, pattern)).toEqual(expectedResult)
 })

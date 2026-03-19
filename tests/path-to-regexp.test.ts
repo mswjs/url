@@ -75,5 +75,5 @@ it.each([
   ['/café', '/:foo', MATCHES_WITH_PARAMS({ foo: 'café' })],
   ['/café', '/café', MATCHES_WITHOUT_PARAMS],
 ])('matches "%j" against "%j"', (input, pattern, expectedResult) => {
-  expect(matchPattern(input, pattern)).toStrictEqual(expectedResult)
+  expect(matchPattern(input, pattern)).toEqual(expectedResult)
 })

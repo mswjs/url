@@ -11,6 +11,7 @@ const SLASH = 47
 const COLON = 58
 const QUESTION_MARK = 63
 const PLUS = 43
+const BACKSLASH = 92
 const UNDERSCORE = 95
 
 const enum TokenType {
@@ -33,7 +34,7 @@ const PATTERN_CACHE_LIMIT = 1000
 const PATTERN_CACHE = new Map<string, ParsedPattern>()
 const NO_MATCH: MatchResult = Object.freeze({
   matches: false,
-  params: Object.freeze({}),
+  params: Object.freeze(Object.create(null)),
 } satisfies MatchResult)
 
 function isIdentStartCode(code: number): boolean {
@@ -48,19 +49,6 @@ function isIdentCharCode(code: number): boolean {
   return isIdentStartCode(code) || (code >= 48 && code <= 57)
 }
 
-// Only call decodeURIComponent when the string actually contains a `%`.
-function decodeParam(value: string): string {
-  if (value.indexOf('%') === -1) {
-    return value
-  }
-
-  try {
-    return decodeURIComponent(value)
-  } catch {
-    return value
-  }
-}
-
 interface ParsedPattern {
   tokens: Array<Token>
   isLiteralOnly: boolean
@@ -71,12 +59,11 @@ function parsePatternOrGetFromCache(pattern: string): ParsedPattern {
 
   if (parsed === undefined) {
     const tokens = parsePattern(pattern)
-    let isLiteralOnly = true
+    let isLiteralOnly = pattern.indexOf('\\') === -1
 
-    for (let i = 0; i < tokens.length; i++) {
+    for (let i = 0; isLiteralOnly && i < tokens.length; i++) {
       if (tokens[i].type !== TokenType.Literal) {
         isLiteralOnly = false
-        break
       }
     }
 
@@ -99,12 +86,17 @@ function parsePattern(pattern: string): Array<Token> {
   while (i < length) {
     const code = pattern.charCodeAt(i)
 
-    if (code === AMPERSAND) {
+    if (code === BACKSLASH && i + 1 < length) {
+      // Escaped character — consume the backslash and the next character
+      // as a literal. Fall through to the literal branch below by not
+      // advancing `i` here (the literal branch handles it).
+    } else if (code === AMPERSAND) {
       tokens.push({
         type: TokenType.Wildcard,
         nextLiteral: undefined,
       })
       i++
+      continue
     } else if (
       code === COLON &&
       i + 1 < length &&
@@ -134,27 +126,52 @@ function parsePattern(pattern: string): Array<Token> {
         modifier,
         nextLiteral: undefined,
       })
-    } else {
-      const start = i
+      continue
+    }
 
-      while (i < length) {
-        const charCode = pattern.charCodeAt(i)
+    // Literal characters. When backslashes are present, we build the
+    // value character by character to strip them. Otherwise, use a
+    // fast slice.
+    let hasEscape = false
+    const start = i
 
-        if (charCode === AMPERSAND) {
-          break
-        }
+    while (i < length) {
+      const charCode = pattern.charCodeAt(i)
 
-        if (
-          charCode === COLON &&
-          i + 1 < length &&
-          isIdentStartCode(pattern.charCodeAt(i + 1))
-        ) {
-          break
-        }
-
-        i++
+      if (charCode === BACKSLASH && i + 1 < length) {
+        hasEscape = true
+        i += 2
+        continue
       }
 
+      if (charCode === AMPERSAND) {
+        break
+      }
+
+      if (
+        charCode === COLON &&
+        i + 1 < length &&
+        isIdentStartCode(pattern.charCodeAt(i + 1))
+      ) {
+        break
+      }
+
+      i++
+    }
+
+    if (hasEscape) {
+      let value = ''
+      for (let j = start; j < i; j++) {
+        if (
+          pattern.charCodeAt(j) === BACKSLASH &&
+          j + 1 < i
+        ) {
+          j++
+        }
+        value += pattern[j]
+      }
+      tokens.push({ type: TokenType.Literal, value })
+    } else {
       tokens.push({
         type: TokenType.Literal,
         value: pattern.slice(start, i),
@@ -184,7 +201,7 @@ function matchTokens(inputString: string, tokens: Array<Token>): MatchResult {
 
   let position = 0
   let wildcardIndex = 0
-  const params: MatchPatternParams = {}
+  const params = Object.create(null) as MatchPatternParams
 
   for (let i = 0; i < tokens.length; i++) {
     const token = tokens[i]
@@ -247,11 +264,9 @@ function matchTokens(inputString: string, tokens: Array<Token>): MatchResult {
     }
 
     if (token.type === TokenType.Wildcard) {
-      params[String(wildcardIndex++)] = decodeParam(
-        inputString.slice(position, endPosition),
-      )
+      params[String(wildcardIndex++)] = inputString.slice(position, endPosition)
     } else if (position !== endPosition) {
-      const captured = decodeParam(inputString.slice(position, endPosition))
+      const captured = inputString.slice(position, endPosition)
       const existing = params[token.name]
 
       if (existing !== undefined) {
@@ -283,6 +298,18 @@ function removeQueryString(input: string): string {
   return queryIndex === -1 ? input : input.slice(0, queryIndex)
 }
 
+function decodeInput(input: string): string {
+  if (input.indexOf('%') === -1) {
+    return input
+  }
+
+  try {
+    return decodeURIComponent(input)
+  } catch {
+    return input
+  }
+}
+
 /**
  * Match a URL against the given pattern.
  * @example
@@ -293,14 +320,16 @@ export function matchPattern(
   input: MatchPatternInput,
   pattern: string,
 ): MatchResult {
-  const inputString = removeQueryString(
-    typeof input === 'string' ? input : input.href,
+  const inputString = decodeInput(
+    removeQueryString(typeof input === 'string' ? input : input.href),
   )
   const { tokens, isLiteralOnly } = parsePatternOrGetFromCache(pattern)
 
   // Pure literal patterns are just a string equality check.
   if (isLiteralOnly) {
-    return inputString === pattern ? { matches: true, params: {} } : NO_MATCH
+    return inputString === pattern
+      ? { matches: true, params: Object.create(null) }
+      : NO_MATCH
   }
 
   return matchTokens(inputString, tokens)
