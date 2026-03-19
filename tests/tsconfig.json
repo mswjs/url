@@ -1,6 +1,0 @@
-{
-  "include": ["**/*.test.ts"],
-  "compilerOptions": {
-    "types": ["vitest/globals"],
-  },
-}

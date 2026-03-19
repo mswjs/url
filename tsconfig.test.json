@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.base.json",
+  "include": ["./tests"],
+  "compilerOptions": {
+    "types": ["vitest/globals"],
+    "declaration": false,
+    "composite": false
+  },
+  "references": [
+    { "path": "./tsconfig.src.json" }
+  ]
+}
