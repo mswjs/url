@@ -262,11 +262,18 @@ function matchTokens(inputString: string, tokens: Array<Token>): MatchResult {
   }
 }
 
+function stripQuery(input: string): string {
+  const queryIndex = input.indexOf('?')
+  return queryIndex === -1 ? input : input.slice(0, queryIndex)
+}
+
 export function matchPattern(
   input: MatchPatternInput,
   pattern: string,
 ): MatchResult {
-  const inputString = typeof input === 'string' ? input : input.href
+  const inputString = stripQuery(
+    typeof input === 'string' ? input : input.href,
+  )
   const { tokens, isLiteralOnly } = getParsedPattern(pattern)
 
   // Pure literal patterns are just a string equality check.

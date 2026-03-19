@@ -149,9 +149,13 @@ it.each<
   [
     'http://localhost/user?id=1',
     'http://localhost/:param',
-    MATCHES_WITH_PARAMS({ param: 'user?id=1' }),
+    MATCHES_WITH_PARAMS({ param: 'user' }),
   ],
-  ['http://localhost/user?id=1', 'http://localhost/user', NO_MATCH],
+  [
+    'http://localhost/user?id=1',
+    'http://localhost/user',
+    MATCHES_WITHOUT_PARAMS,
+  ],
   [
     'http://localhost/path#section',
     'http://localhost/:param',
