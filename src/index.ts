@@ -338,17 +338,21 @@ function matchTokens(
 
     // Check emptiness before allocating the captured substring.
     const allowEmpty =
-      token.type === TokenType.Param &&
-      (token.modifier === '?' || token.modifier === '*')
+      token.type === TokenType.Wildcard ||
+      (token.type === TokenType.Param &&
+        (token.modifier === '?' || token.modifier === '*'))
 
     if (!allowEmpty && position === endPosition) {
       return NO_MATCH
     }
 
     if (token.type === TokenType.Wildcard) {
-      params[String(wildcardIndex++)] = decode(
-        inputString.slice(position, endPosition),
-      )
+      if (position !== endPosition) {
+        params[String(wildcardIndex)] = decode(
+          inputString.slice(position, endPosition),
+        )
+      }
+      wildcardIndex++
     } else if (position !== endPosition) {
       const captured = decode(inputString.slice(position, endPosition))
       const existing = params[token.name]
@@ -432,7 +436,7 @@ export function matchPattern(
 
   // Pure literal patterns are just a string equality check.
   // Try raw first, then decoded (for encoded inputs like %C3%A9 vs é).
-  // When the pattern doesn't end with '/', also match with trailing
+  // When the pattern doesn't end with '/', also try with trailing
   // slash stripped from the input.
   if (isLiteralOnly) {
     if (inputString === pattern || decode(inputString) === pattern) {

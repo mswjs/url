@@ -79,10 +79,8 @@ it.each<
     'http://localhost/user/*/*',
     MATCHES_WITH_PARAMS({ '0': '123', '1': 'settings' }),
   ],
-
-  /* Wildcard non-match */
   ['http://localhost', 'http://localhost/*', NO_MATCH],
-  ['http://localhost/', 'http://localhost/*', NO_MATCH],
+  ['http://localhost/', 'http://localhost/*', MATCHES_WITHOUT_PARAMS],
 
   /* Three or more wildcards */
   [

@@ -54,6 +54,33 @@ This function supports the following features:
 
 `matchPattern` uses token-based comparision to completely forego regular expressions, which should, technically, make it more performant and less prone to vulnerabilities. Doesn't promise full feature parity with `path-to-regexp` but currently uses its test suite as the compliance bar.
 
+### Trailing slashes
+
+The pattern is the source of truth. If it ends with a trailing slash, then the input must also end with it to match. If the pattern doesn't end with a trailing slash, then the trailing slash in the input is ignored when matching.
+
+```ts
+// No trailing slash in the pattern? Ignore it.
+matchPattern('/api', '/api') // ✅
+matchPattern('/api/', '/api') // ✅
+
+// Trailing slash in the pattern? It's required.
+matchPattern('/api/', '/api/') // ✅
+matchPattern('/api', '/api/') // ❌
+```
+
+> This is to accommodate to JavaScript developers not being used to providing trailing slashes.
+
+### Wildcards
+
+Wildcards _do not require value_ at their position.
+
+```ts
+matchPattern('/user/', '/user/*') // ✅ { params: { '0': ''} }
+matchPattern('/user', '/user/*') // ❌
+```
+
+> Note that the slash before the wildcard is still treated as required.
+
 ## Benchmarks
 
 ```sh
