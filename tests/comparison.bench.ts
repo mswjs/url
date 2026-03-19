@@ -20,6 +20,8 @@ describe('static path', () => {
   const fmw = FindMyWay()
   fmw.on('GET', path, noop)
 
+  const urlPattern = new URLPattern({ pathname: path })
+
   bench('matchPattern', () => {
     matchPattern(path, path)
   })
@@ -30,6 +32,10 @@ describe('static path', () => {
 
   bench('find-my-way', () => {
     fmw.find('GET', path)
+  })
+
+  bench('URLPattern', () => {
+    urlPattern.exec({ pathname: path })
   })
 })
 
@@ -42,6 +48,8 @@ describe('single param', () => {
   const fmw = FindMyWay()
   fmw.on('GET', pattern, noop)
 
+  const urlPattern = new URLPattern({ pathname: pattern })
+
   bench('matchPattern', () => {
     matchPattern(input, pattern)
   })
@@ -52,6 +60,10 @@ describe('single param', () => {
 
   bench('find-my-way', () => {
     fmw.find('GET', input)
+  })
+
+  bench('URLPattern', () => {
+    urlPattern.exec({ pathname: input })
   })
 })
 
@@ -64,6 +76,8 @@ describe('multiple params', () => {
   const fmw = FindMyWay()
   fmw.on('GET', pattern, noop)
 
+  const urlPattern = new URLPattern({ pathname: pattern })
+
   bench('matchPattern', () => {
     matchPattern(input, pattern)
   })
@@ -75,6 +89,10 @@ describe('multiple params', () => {
   bench('find-my-way', () => {
     fmw.find('GET', input)
   })
+
+  bench('URLPattern', () => {
+    urlPattern.exec({ pathname: input })
+  })
 })
 
 describe('param with extension', () => {
@@ -85,12 +103,18 @@ describe('param with extension', () => {
 
   // find-my-way does not support inline extension params like `:file.:ext`.
 
+  const urlPattern = new URLPattern({ pathname: pattern })
+
   bench('matchPattern', () => {
     matchPattern(input, pattern)
   })
 
   bench('path-to-regexp', () => {
     p2rMatcher(input)
+  })
+
+  bench('URLPattern', () => {
+    urlPattern.exec({ pathname: input })
   })
 })
 
@@ -103,6 +127,8 @@ describe('non-match (miss)', () => {
   const fmw = FindMyWay()
   fmw.on('GET', pattern, noop)
 
+  const urlPattern = new URLPattern({ pathname: pattern })
+
   bench('matchPattern', () => {
     matchPattern(input, pattern)
   })
@@ -113,6 +139,10 @@ describe('non-match (miss)', () => {
 
   bench('find-my-way', () => {
     fmw.find('GET', input)
+  })
+
+  bench('URLPattern', () => {
+    urlPattern.exec({ pathname: input })
   })
 })
 
@@ -125,6 +155,8 @@ describe('deeply nested params', () => {
   const fmw = FindMyWay()
   fmw.on('GET', pattern, noop)
 
+  const urlPattern = new URLPattern({ pathname: pattern })
+
   bench('matchPattern', () => {
     matchPattern(input, pattern)
   })
@@ -135,6 +167,10 @@ describe('deeply nested params', () => {
 
   bench('find-my-way', () => {
     fmw.find('GET', input)
+  })
+
+  bench('URLPattern', () => {
+    urlPattern.exec({ pathname: input })
   })
 })
 
@@ -149,6 +185,7 @@ describe('full URL: static', () => {
   const url = 'http://localhost/users/settings/profile'
 
   const remixPattern = new RoutePattern(url)
+  const urlPattern = new URLPattern(url)
 
   bench('matchPattern', () => {
     matchPattern(url, url)
@@ -157,6 +194,10 @@ describe('full URL: static', () => {
   bench('route-pattern', () => {
     remixPattern.match(url)
   })
+
+  bench('URLPattern', () => {
+    urlPattern.exec(url)
+  })
 })
 
 describe('full URL: single param', () => {
@@ -164,6 +205,7 @@ describe('full URL: single param', () => {
   const input = 'http://localhost/users/123'
 
   const remixPattern = new RoutePattern(pattern)
+  const urlPattern = new URLPattern(pattern)
 
   bench('matchPattern', () => {
     matchPattern(input, pattern)
@@ -171,6 +213,10 @@ describe('full URL: single param', () => {
 
   bench('route-pattern', () => {
     remixPattern.match(input)
+  })
+
+  bench('URLPattern', () => {
+    urlPattern.exec(input)
   })
 })
 
@@ -179,6 +225,7 @@ describe('full URL: multiple params', () => {
   const input = 'http://localhost/users/123/posts/456'
 
   const remixPattern = new RoutePattern(pattern)
+  const urlPattern = new URLPattern(pattern)
 
   bench('matchPattern', () => {
     matchPattern(input, pattern)
@@ -186,6 +233,10 @@ describe('full URL: multiple params', () => {
 
   bench('route-pattern', () => {
     remixPattern.match(input)
+  })
+
+  bench('URLPattern', () => {
+    urlPattern.exec(input)
   })
 })
 
@@ -194,6 +245,7 @@ describe('full URL: non-match (miss)', () => {
   const input = 'http://localhost/posts/123'
 
   const remixPattern = new RoutePattern(pattern)
+  const urlPattern = new URLPattern(pattern)
 
   bench('matchPattern', () => {
     matchPattern(input, pattern)
@@ -201,5 +253,9 @@ describe('full URL: non-match (miss)', () => {
 
   bench('route-pattern', () => {
     remixPattern.match(input)
+  })
+
+  bench('URLPattern', () => {
+    urlPattern.exec(input)
   })
 })
