@@ -40,6 +40,19 @@ function isIdentCharCode(code: number): boolean {
   return isIdentStartCode(code) || (code >= 48 && code <= 57)
 }
 
+// Only call decodeURIComponent when the string actually contains a `%`.
+function decodeParam(value: string): string {
+  if (value.indexOf('%') === -1) {
+    return value
+  }
+
+  try {
+    return decodeURIComponent(value)
+  } catch {
+    return value
+  }
+}
+
 interface ParsedPattern {
   tokens: Array<Token>
   isLiteralOnly: boolean
@@ -218,9 +231,11 @@ function matchTokens(inputString: string, tokens: Array<Token>): MatchResult {
     }
 
     if (token.type === TokenType.Wildcard) {
-      params[String(wildcardIndex++)] = inputString.slice(position, endPosition)
+      params[String(wildcardIndex++)] = decodeParam(
+        inputString.slice(position, endPosition),
+      )
     } else if (position !== endPosition) {
-      const captured = inputString.slice(position, endPosition)
+      const captured = decodeParam(inputString.slice(position, endPosition))
       const existing = params[token.name]
 
       if (existing !== undefined) {

@@ -197,6 +197,38 @@ it.each<
   ],
   ['http://localhost/', 'http://localhost/:param*', MATCHES_WITHOUT_PARAMS],
 
+  /* URL-encoded param decoding */
+  [
+    'http://localhost/caf%C3%A9',
+    'http://localhost/:name',
+    MATCHES_WITH_PARAMS({ name: 'café' }),
+  ],
+  [
+    'http://localhost/hello%20world',
+    'http://localhost/:param',
+    MATCHES_WITH_PARAMS({ param: 'hello world' }),
+  ],
+  [
+    'http://localhost/100%25',
+    'http://localhost/*',
+    MATCHES_WITH_PARAMS({ '0': '100%' }),
+  ],
+  [
+    'http://localhost/no-encoding',
+    'http://localhost/:param',
+    MATCHES_WITH_PARAMS({ param: 'no-encoding' }),
+  ],
+  [
+    'http://localhost/%E4%B8%AD%E6%96%87',
+    'http://localhost/:param',
+    MATCHES_WITH_PARAMS({ param: '中文' }),
+  ],
+  [
+    'http://localhost/bad%encoding',
+    'http://localhost/:param',
+    MATCHES_WITH_PARAMS({ param: 'bad%encoding' }),
+  ],
+
   /* URL instance as input */
   [
     new URL('http://localhost/user/123'),
