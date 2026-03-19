@@ -1,5 +1,5 @@
 {
-  "name": "match-url",
+  "name": "match-pattern",
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
@@ -8,7 +8,7 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "devDependencies": {
     "@remix-run/route-pattern": "^0.19.0",
     "find-my-way": "^9.5.0",
