@@ -37,6 +37,9 @@
   "author": "Artem Zakharchenko <kettanaito@gmail.com>",
   "license": "MIT",
   "homepage": "https://github.com/mswjs/url",
+  "publishConfig": {
+    "access": "public"
+  },
   "devDependencies": {
     "@ossjs/release": "^0.10.1",
     "@remix-run/route-pattern": "^0.19.0",
