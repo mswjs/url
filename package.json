@@ -1,8 +1,8 @@
 {
   "type": "module",
-  "name": "match-pattern",
+  "name": "@msw/url",
   "version": "1.0.0",
-  "description": "",
+  "description": "Utilities for working with URLs.",
   "imports": {
     "#src/*": "./src/*",
     "#tests/*": "./tests/*"
@@ -19,9 +19,18 @@
   "files": [
     "./build"
   ],
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "match",
+    "url",
+    "pattern",
+    "route",
+    "parse",
+    "params",
+    "wildcard"
+  ],
+  "author": "Artem Zakharchenko <kettanaito@gmail.com>",
   "license": "MIT",
+  "homepage": "https://github.com/mswjs/url",
   "devDependencies": {
     "@remix-run/route-pattern": "^0.19.0",
     "@types/node": "^25.5.0",
