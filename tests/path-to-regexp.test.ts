@@ -8,7 +8,7 @@ it.each([
   ['/test', '/test', MATCHES_WITHOUT_PARAMS],
   ['/route', '/test', NO_MATCH],
   ['/test/route', '/test', NO_MATCH],
-  ['/test/', '/test', NO_MATCH],
+  ['/test/', '/test', MATCHES_WITHOUT_PARAMS],
   ['/TEST/', '/test', NO_MATCH],
   ['/test/', '/test/', MATCHES_WITHOUT_PARAMS],
   ['/route', '/test/', NO_MATCH],
@@ -17,7 +17,7 @@ it.each([
 
   /* Path params */
   ['/route', '/:test', MATCHES_WITH_PARAMS({ test: 'route' })],
-  ['/route/', '/:test', NO_MATCH],
+  ['/route/', '/:test', MATCHES_WITH_PARAMS({ test: 'route' })],
   ['/route.json', '/:test', MATCHES_WITH_PARAMS({ test: 'route.json' })],
   ['/route/test', '/:test', NO_MATCH],
   [
@@ -31,7 +31,7 @@ it.each([
   ['/test', 'test', NO_MATCH],
   ['route', ':test', MATCHES_WITH_PARAMS({ test: 'route' })],
   ['/route', ':test', NO_MATCH],
-  ['route/', ':test', NO_MATCH],
+  ['route/', ':test', MATCHES_WITH_PARAMS({ test: 'route' })],
 
   /* Formats */
   ['/test.json', '/test.json', MATCHES_WITHOUT_PARAMS],

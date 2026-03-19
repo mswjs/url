@@ -52,6 +52,7 @@ function isIdentCharCode(code: number): boolean {
 interface ParsedPattern {
   tokens: Array<Token>
   isLiteralOnly: boolean
+  hasTrailingSlash: boolean
 }
 
 function parsePatternOrGetFromCache(pattern: string): ParsedPattern {
@@ -67,11 +68,22 @@ function parsePatternOrGetFromCache(pattern: string): ParsedPattern {
       }
     }
 
+    // The pattern "ends with slash" only when the very last token
+    // is a literal that ends with '/'. If the last token is a
+    // param/wildcard, trailing '/' in a preceding literal is
+    // structural (a separator), not trailing.
+    const lastToken = tokens[tokens.length - 1]
+    const hasTrailingSlash =
+      lastToken !== undefined &&
+      lastToken.type === TokenType.Literal &&
+      lastToken.value.length > 0 &&
+      lastToken.value.charCodeAt(lastToken.value.length - 1) === SLASH
+
     if (PATTERN_CACHE.size >= PATTERN_CACHE_LIMIT) {
       PATTERN_CACHE.delete(PATTERN_CACHE.keys().next().value!)
     }
 
-    parsed = { tokens, isLiteralOnly }
+    parsed = { tokens, isLiteralOnly, hasTrailingSlash }
     PATTERN_CACHE.set(pattern, parsed)
   }
 
@@ -162,10 +174,7 @@ function parsePattern(pattern: string): Array<Token> {
     if (hasEscape) {
       let value = ''
       for (let j = start; j < i; j++) {
-        if (
-          pattern.charCodeAt(j) === BACKSLASH &&
-          j + 1 < i
-        ) {
+        if (pattern.charCodeAt(j) === BACKSLASH && j + 1 < i) {
           j++
         }
         value += pattern[j]
@@ -228,7 +237,11 @@ function findEncodedLiteralEnd(
   return -1
 }
 
-function matchTokens(inputString: string, tokens: Array<Token>): MatchResult {
+function matchTokens(
+  inputString: string,
+  tokens: Array<Token>,
+  tolerateTrailingSlash: boolean,
+): MatchResult {
   const inputLength = inputString.length
 
   let position = 0
@@ -333,8 +346,20 @@ function matchTokens(inputString: string, tokens: Array<Token>): MatchResult {
     position = endPosition
   }
 
-  if (position !== inputLength) {
-    return NO_MATCH
+  // If the pattern doesn't end with '/', tolerate a trailing slash
+  // in the input that wasn't consumed by any token.
+  const unconsumed = inputLength - position
+
+  if (unconsumed > 0) {
+    if (
+      tolerateTrailingSlash &&
+      unconsumed === 1 &&
+      inputString.charCodeAt(position) === SLASH
+    ) {
+      // Trailing slash — accepted.
+    } else {
+      return NO_MATCH
+    }
   }
 
   return {
@@ -346,6 +371,13 @@ function matchTokens(inputString: string, tokens: Array<Token>): MatchResult {
 function removeQueryString(input: string): string {
   const queryIndex = input.indexOf('?')
   return queryIndex === -1 ? input : input.slice(0, queryIndex)
+}
+
+function removeTrailingSlash(input: string): string {
+  if (input.length > 1 && input.charCodeAt(input.length - 1) === SLASH) {
+    return input.slice(0, -1)
+  }
+  return input
 }
 
 function decode(value: string): string {
@@ -370,18 +402,29 @@ export function matchPattern(
   input: MatchPatternInput,
   pattern: string,
 ): MatchResult {
-  const inputString = removeQueryString(
+  let inputString = removeQueryString(
     typeof input === 'string' ? input : input.href,
   )
-  const { tokens, isLiteralOnly } = parsePatternOrGetFromCache(pattern)
+
+  const { tokens, isLiteralOnly, hasTrailingSlash } =
+    parsePatternOrGetFromCache(pattern)
 
   // Pure literal patterns are just a string equality check.
   // Try raw first, then decoded (for encoded inputs like %C3%A9 vs é).
+  // When the pattern doesn't end with '/', also match with trailing
+  // slash stripped from the input.
   if (isLiteralOnly) {
-    return inputString === pattern || decode(inputString) === pattern
-      ? { matches: true, params: Object.create(null) }
-      : NO_MATCH
+    if (inputString === pattern || decode(inputString) === pattern) {
+      return { matches: true, params: Object.create(null) }
+    }
+    if (!hasTrailingSlash) {
+      const stripped = removeTrailingSlash(inputString)
+      if (stripped === pattern || decode(stripped) === pattern) {
+        return { matches: true, params: Object.create(null) }
+      }
+    }
+    return NO_MATCH
   }
 
-  return matchTokens(inputString, tokens)
+  return matchTokens(inputString, tokens, !hasTrailingSlash)
 }
