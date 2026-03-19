@@ -6,11 +6,12 @@ export interface MatchResult {
 export type MatchPatternInput = string | URL
 export type MatchPatternParams = Record<string, string | Array<string>>
 
-const AMPERSAND = 42 // *
-const COLON = 58 // :
-const QUESTION_MARK = 63 // ?
-const PLUS = 43 // +
-const UNDERSCORE = 95 // _
+const AMPERSAND = 42
+const SLASH = 47
+const COLON = 58
+const QUESTION_MARK = 63
+const PLUS = 43
+const UNDERSCORE = 95
 
 const enum TokenType {
   Literal,
@@ -64,10 +65,10 @@ const NO_MATCH: MatchResult = Object.freeze({
 }) as MatchResult
 
 const PATTERN_CACHE_LIMIT = 1000
-const patternCache = new Map<string, ParsedPattern>()
+const PATTERN_CACHE = new Map<string, ParsedPattern>()
 
 function getParsedPattern(pattern: string): ParsedPattern {
-  let parsed = patternCache.get(pattern)
+  let parsed = PATTERN_CACHE.get(pattern)
 
   if (parsed === undefined) {
     const tokens = parsePattern(pattern)
@@ -80,12 +81,12 @@ function getParsedPattern(pattern: string): ParsedPattern {
       }
     }
 
-    if (patternCache.size >= PATTERN_CACHE_LIMIT) {
-      patternCache.delete(patternCache.keys().next().value!)
+    if (PATTERN_CACHE.size >= PATTERN_CACHE_LIMIT) {
+      PATTERN_CACHE.delete(PATTERN_CACHE.keys().next().value!)
     }
 
     parsed = { tokens, isLiteralOnly }
-    patternCache.set(pattern, parsed)
+    PATTERN_CACHE.set(pattern, parsed)
   }
 
   return parsed
@@ -199,11 +200,21 @@ function matchTokens(inputString: string, tokens: Array<Token>): MatchResult {
     }
 
     // Wildcard or param — use precomputed nextLiteral.
+    // Params without + or * modifiers are segment-scoped (stop at '/').
     const nextLiteralValue = token.nextLiteral
+    const isSegmentScoped =
+      token.type === TokenType.Param &&
+      token.modifier !== '+' &&
+      token.modifier !== '*'
     let endPosition: number
 
     if (nextLiteralValue === undefined) {
-      endPosition = inputLength
+      if (isSegmentScoped) {
+        const slashIndex = inputString.indexOf('/', position)
+        endPosition = slashIndex === -1 ? inputLength : slashIndex
+      } else {
+        endPosition = inputLength
+      }
     } else {
       const idx = inputString.indexOf(nextLiteralValue, position)
 
@@ -216,6 +227,12 @@ function matchTokens(inputString: string, tokens: Array<Token>): MatchResult {
         } else {
           return NO_MATCH
         }
+      } else if (isSegmentScoped && nextLiteralValue.charCodeAt(0) !== SLASH) {
+        // Only check for '/' when the next literal doesn't already
+        // start with '/' — if it does, indexOf(nextLiteral) already
+        // found the segment boundary.
+        const slashIndex = inputString.indexOf('/', position)
+        endPosition = slashIndex === -1 || slashIndex >= idx ? idx : slashIndex
       } else {
         endPosition = idx
       }
@@ -271,9 +288,7 @@ export function matchPattern(
   input: MatchPatternInput,
   pattern: string,
 ): MatchResult {
-  const inputString = stripQuery(
-    typeof input === 'string' ? input : input.href,
-  )
+  const inputString = stripQuery(typeof input === 'string' ? input : input.href)
   const { tokens, isLiteralOnly } = getParsedPattern(pattern)
 
   // Pure literal patterns are just a string equality check.

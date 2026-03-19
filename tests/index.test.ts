@@ -100,16 +100,8 @@ it.each<
     'http://:param',
     MATCHES_WITH_PARAMS({ param: 'localhost' }),
   ],
-  [
-    'http://localhost/user/123',
-    'http://:param',
-    MATCHES_WITH_PARAMS({ param: 'localhost/user/123' }),
-  ],
-  [
-    'http://localhost/user/123',
-    'http://localhost/:param',
-    MATCHES_WITH_PARAMS({ param: 'user/123' }),
-  ],
+  ['http://localhost/user/123', 'http://:param', NO_MATCH],
+  ['http://localhost/user/123', 'http://localhost/:param', NO_MATCH],
   [
     'http://localhost/user/123',
     'http://localhost/:param/123',
