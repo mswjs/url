@@ -29,6 +29,13 @@ type Token =
       nextLiteral: string | undefined
     }
 
+const PATTERN_CACHE_LIMIT = 1000
+const PATTERN_CACHE = new Map<string, ParsedPattern>()
+const NO_MATCH: MatchResult = Object.freeze({
+  matches: false,
+  params: Object.freeze({}),
+} satisfies MatchResult)
+
 function isIdentStartCode(code: number): boolean {
   return (
     (code >= 97 && code <= 122) ||
@@ -58,14 +65,6 @@ interface ParsedPattern {
   tokens: Array<Token>
   isLiteralOnly: boolean
 }
-
-const NO_MATCH: MatchResult = Object.freeze({
-  matches: false,
-  params: Object.freeze({}),
-}) as MatchResult
-
-const PATTERN_CACHE_LIMIT = 1000
-const PATTERN_CACHE = new Map<string, ParsedPattern>()
 
 function getParsedPattern(pattern: string): ParsedPattern {
   let parsed = PATTERN_CACHE.get(pattern)
