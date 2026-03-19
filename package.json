@@ -1,7 +1,7 @@
 {
   "type": "module",
   "name": "@msw/url",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Utilities for working with URLs.",
   "types": "./build/index.d.mts",
   "imports": {
