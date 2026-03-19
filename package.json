@@ -19,7 +19,8 @@
     "lint": "publint",
     "test": "vitest",
     "bench": "vitest bench",
-    "build": "tsdown"
+    "build": "tsdown",
+    "release": "release publish"
   },
   "files": [
     "./build"
@@ -37,6 +38,7 @@
   "license": "MIT",
   "homepage": "https://github.com/mswjs/url",
   "devDependencies": {
+    "@ossjs/release": "^0.10.1",
     "@remix-run/route-pattern": "^0.19.0",
     "@types/node": "^25.5.0",
     "find-my-way": "^9.5.0",
