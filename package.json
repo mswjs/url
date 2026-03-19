@@ -36,6 +36,9 @@
   ],
   "author": "Artem Zakharchenko <kettanaito@gmail.com>",
   "license": "MIT",
+  "repository": {
+    "url": "https://github.com/mswjs/url"
+  },
   "homepage": "https://github.com/mswjs/url",
   "publishConfig": {
     "access": "public"
