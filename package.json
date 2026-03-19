@@ -3,12 +3,16 @@
   "name": "@msw/url",
   "version": "1.0.0",
   "description": "Utilities for working with URLs.",
+  "types": "./build/index.d.mts",
   "imports": {
     "#src/*": "./src/*",
     "#tests/*": "./tests/*"
   },
   "exports": {
-    ".": "./build/index.mjs"
+    ".": {
+      "types": "./build/index.d.mts",
+      "default": "./build/index.mjs"
+    }
   },
   "scripts": {
     "start": "tsdown -w",
