@@ -225,6 +225,32 @@ it.each<
     MATCHES_WITH_PARAMS({ param: 'bad%encoding' }),
   ],
 
+  /* Relative URLs (path-only) */
+  ['/users/settings', '/users/settings', MATCHES_WITHOUT_PARAMS],
+  ['/users/settings', '/users/other', NO_MATCH],
+  ['/users/123', '/users/:id', MATCHES_WITH_PARAMS({ id: '123' })],
+  ['/users/123', '/users/:id/posts', NO_MATCH],
+  [
+    '/users/123/posts/456',
+    '/users/:userId/posts/:postId',
+    MATCHES_WITH_PARAMS({ userId: '123', postId: '456' }),
+  ],
+  ['/users/123', '/users/*', MATCHES_WITH_PARAMS({ '0': '123' })],
+  [
+    '/users/123/posts',
+    '/users/*/*',
+    MATCHES_WITH_PARAMS({ '0': '123', '1': 'posts' }),
+  ],
+  ['/users/123', '/users/:id?', MATCHES_WITH_PARAMS({ id: '123' })],
+  ['/users/', '/users/:id?', MATCHES_WITHOUT_PARAMS],
+  ['/users/123/posts', '/users/:path+', MATCHES_WITH_PARAMS({ path: '123/posts' })],
+  ['/users/', '/users/:path+', NO_MATCH],
+  ['/users/123/posts', '/users/:path*', MATCHES_WITH_PARAMS({ path: '123/posts' })],
+  ['/users/', '/users/:path*', MATCHES_WITHOUT_PARAMS],
+  ['/users/caf%C3%A9', '/users/:name', MATCHES_WITH_PARAMS({ name: 'café' })],
+  ['/users/123?tab=posts', '/users/:id', MATCHES_WITH_PARAMS({ id: '123' })],
+  ['/users/123?tab=posts', '/users/123', MATCHES_WITHOUT_PARAMS],
+
   /* URL instance as input */
   [
     new URL('http://localhost/user/123'),
