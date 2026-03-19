@@ -128,12 +128,7 @@ function parsePattern(pattern: string): Array<Token> {
   return tokens
 }
 
-export function matchPattern(
-  input: MatchPatternInput,
-  pattern: string,
-): MatchResult {
-  const inputString = typeof input === 'string' ? input : input.href
-  const tokens = parsePattern(pattern)
+function matchTokens(inputString: string, tokens: Array<Token>): MatchResult {
   const inputLength = inputString.length
 
   let position = 0
@@ -224,4 +219,25 @@ export function matchPattern(
     matches: true,
     params,
   }
+}
+
+export function matchPattern(
+  input: MatchPatternInput,
+  pattern: string,
+): MatchResult {
+  const tokens = parsePattern(pattern)
+
+  if (input instanceof URL) {
+    const result = matchTokens(input.href, tokens)
+
+    if (result.matches || input.pathname !== '/') {
+      return result
+    }
+
+    // The URL constructor implicitly adds a trailing slash for root
+    // pathnames. Retry without it to make the implicit slash optional.
+    return matchTokens(input.href.slice(0, -1), tokens)
+  }
+
+  return matchTokens(input, tokens)
 }

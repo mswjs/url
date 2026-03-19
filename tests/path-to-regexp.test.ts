@@ -2,7 +2,7 @@ import { matchPattern } from '../src'
 import { NO_MATCH, MATCHES_WITH_PARAMS, MATCHES_WITHOUT_PARAMS } from './utils'
 
 it.each([
-  /* Simple paths (adapted from path-to-regexp) */
+  /* Simple paths */
   ['/', '/', MATCHES_WITHOUT_PARAMS],
   ['/route', '/', NO_MATCH],
   ['/test', '/test', MATCHES_WITHOUT_PARAMS],
@@ -15,7 +15,7 @@ it.each([
   ['/test', '/test/', NO_MATCH],
   ['/test//', '/test/', NO_MATCH],
 
-  /* Path params (adapted from path-to-regexp) */
+  /* Path params */
   ['/route', '/:test', MATCHES_WITH_PARAMS({ test: 'route' })],
   ['/route/', '/:test', MATCHES_WITH_PARAMS({ test: 'route/' })],
   ['/route.json', '/:test', MATCHES_WITH_PARAMS({ test: 'route.json' })],
@@ -26,14 +26,14 @@ it.each([
     MATCHES_WITH_PARAMS({ test: ';,:@&=+$-_.!~*()' }),
   ],
 
-  /* No prefix characters (adapted from path-to-regexp) */
+  /* No prefix characters */
   ['test', 'test', MATCHES_WITHOUT_PARAMS],
   ['/test', 'test', NO_MATCH],
   ['route', ':test', MATCHES_WITH_PARAMS({ test: 'route' })],
   ['/route', ':test', MATCHES_WITH_PARAMS({ test: '/route' })],
   ['route/', ':test', MATCHES_WITH_PARAMS({ test: 'route/' })],
 
-  /* Formats (adapted from path-to-regexp) */
+  /* Formats */
   ['/test.json', '/test.json', MATCHES_WITHOUT_PARAMS],
   ['/test', '/test.json', NO_MATCH],
   ['/.json', '/:test.json', NO_MATCH],
@@ -41,7 +41,7 @@ it.each([
   ['/route.json', '/:test.json', MATCHES_WITH_PARAMS({ test: 'route' })],
   ['/route.json.json', '/:test.json', NO_MATCH],
 
-  /* Format and path params (adapted from path-to-regexp) */
+  /* Format and path params */
   [
     '/route.html',
     '/:test.:format',
@@ -54,14 +54,14 @@ it.each([
     MATCHES_WITH_PARAMS({ test: 'route', format: 'html.json' }),
   ],
 
-  /* Multiple path params (adapted from path-to-regexp) */
+  /* Multiple path params */
   [
     '/match/route',
     '/:foo/:bar',
     MATCHES_WITH_PARAMS({ foo: 'match', bar: 'route' }),
   ],
 
-  /* Params with pipe delimiters (adapted from path-to-regexp) */
+  /* Params with pipe delimiters */
   ['/route|world|', '/route|:param|', MATCHES_WITH_PARAMS({ param: 'world' })],
   ['/route||', '/route|:param|', NO_MATCH],
   [
@@ -71,7 +71,7 @@ it.each([
   ],
   ['/hello||', '/:foo|:bar|', NO_MATCH],
 
-  /* Unicode (adapted from path-to-regexp) */
+  /* Unicode */
   ['/café', '/:foo', MATCHES_WITH_PARAMS({ foo: 'café' })],
   ['/café', '/café', MATCHES_WITHOUT_PARAMS],
 ])('matches "%j" against "%j"', (input, pattern, expectedResult) => {
