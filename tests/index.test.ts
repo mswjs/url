@@ -1,5 +1,9 @@
-import { matchPattern, MatchResult } from '../src'
-import { NO_MATCH, MATCHES_WITH_PARAMS, MATCHES_WITHOUT_PARAMS } from './utils'
+import { matchPattern, MatchResult } from '#src/index.js'
+import {
+  NO_MATCH,
+  MATCHES_WITH_PARAMS,
+  MATCHES_WITHOUT_PARAMS,
+} from '#tests/utils.js'
 
 it.each<
   [

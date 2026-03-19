@@ -1,8 +1,8 @@
 import { bench, describe } from 'vitest'
-import { matchPattern } from '../src'
 import { match as pathToRegexpMatch } from 'path-to-regexp'
 import { RoutePattern } from '@remix-run/route-pattern'
 import FindMyWay from 'find-my-way'
+import { matchPattern } from '#src/index.js'
 
 const noop = () => {}
 
