@@ -39,22 +39,18 @@ Matches a URL against the given pattern.
 
 ```ts
 import { matchPattern } from '@msw/url'
-
-matchPattern('/user/abc-123', '/user/:userId')
-// { matches: true, params: { userId: 'abc-123' } }
 ```
-
-This function supports the following features:
-
-- URL strings and `URL` instances as the `input`;
-- Absolute and relative URLs;
-- Wildcards (`http://*.domain.com:*/route`);
-- Path parameters, including optional (`:param?`), splat (`:param*`), and one-or-more (`:param+`) modifiers;
-- Encoded URL segments;
 
 `matchPattern` uses token-based comparision to completely forego regular expressions, which should, technically, make it more performant and less prone to vulnerabilities. Doesn't promise full feature parity with `path-to-regexp` but currently uses its test suite as the compliance bar.
 
-### Trailing slashes
+#### Absolute and relative URLs
+
+```ts
+matchPattern('/user', '/user')
+matchPattern('https://acme.com/user', 'https://acme.com/user')
+```
+
+#### Trailing slashes
 
 The pattern is the source of truth. If it ends with a trailing slash, then the input must also end with it to match. If the pattern doesn't end with a trailing slash, then the trailing slash in the input is ignored when matching.
 
@@ -70,16 +66,73 @@ matchPattern('/api', '/api/') // ❌
 
 > This is to accommodate to JavaScript developers not being used to providing trailing slashes.
 
-### Wildcards
+#### Path parameters
 
-Wildcards _do not require value_ at their position.
+```ts
+matchPattern('/user/123', '/user/:userId')
+// { matches: true, params: { userId: '123' } }
+```
+
+> Parameter values are always strings, just like any other segment of a URL.
+
+##### Optional parameters
+
+```ts
+matchPattern('/user/', '/user/:userId?')
+// { matches: true, params: {} }
+
+matchPattern('/user/123', '/user/:userId?')
+// { matches: true, params: { userId: '123' } }
+```
+
+##### Splat parameters
+
+```ts
+matchPattern('/user/', '/user/:userId*')
+// { matches: true, params: {} }
+
+matchPattern('/user/123', '/user/:userId*')
+// { matches: true, params: { userId: '123' } }
+
+matchPattern('/user/123/messages', '/user/:userId*')
+// { matches: true, params: { userId: '123/messages' } }
+```
+
+##### One-or-more parameters
+
+```ts
+matchPattern('/user/', '/user/:userId+')
+// { matches: false }
+
+matchPattern('/user/123', '/user/:userId+')
+// { matches: true, params: { userId: '123' } }
+
+matchPattern('/user/123/messages', '/user/:userId+')
+// { matches: true, params: { userId: '123/messages' } }
+```
+
+#### Wildcards
+
+```ts
+matchPattern('http://acme.com/user/123', 'http://*.com/user/*')
+// { matches: true, params: { '0': 'acme', '1': '123' } }
+```
+
+> If no value is present at the wildcard's position, the pattern will still match with the wildcard parameter value `''`. Wildcards are, effectively, unnamed splat parameters.
+
+A slash preceding a wildcard is not a part of the wildcard and is _required_:
 
 ```ts
 matchPattern('/user/', '/user/*') // ✅ { params: { '0': ''} }
 matchPattern('/user', '/user/*') // ❌
 ```
 
-> Note that the slash before the wildcard is still treated as required.
+#### Encoded URL segments
+
+```ts
+matchPattern('/%E4%B8%AD%E6%96%87', '/:name')
+// { matches: true, params: { name: '中文' } }
+```
 
 ## Benchmarks
 
