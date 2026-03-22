@@ -81,6 +81,11 @@ it.each<
   ],
   ['http://localhost', 'http://localhost/*', NO_MATCH],
   ['http://localhost/', 'http://localhost/*', MATCHES_WITHOUT_PARAMS],
+  [
+    'http://localhost/1a1a1a',
+    'http://localhost/*a*a*a',
+    MATCHES_WITH_PARAMS({ '0': '1', '1': '1', '2': '1' }),
+  ],
 
   /* Three or more wildcards */
   [
