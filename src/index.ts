@@ -393,7 +393,11 @@ function matchTokens(
   }
 }
 
-function removeQueryString(input: string): string {
+function removeQueryAndFragment(input: string): string {
+  const hashIndex = input.indexOf('#')
+  if (hashIndex !== -1) {
+    input = input.slice(0, hashIndex)
+  }
   const queryIndex = input.indexOf('?')
   return queryIndex === -1 ? input : input.slice(0, queryIndex)
 }
@@ -427,7 +431,7 @@ export function matchPattern(
   input: MatchPatternInput,
   pattern: string,
 ): MatchResult {
-  let inputString = removeQueryString(
+  let inputString = removeQueryAndFragment(
     typeof input === 'string' ? input : input.href,
   )
 

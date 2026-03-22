@@ -153,7 +153,7 @@ it.each<
   [
     'http://localhost/path#section',
     'http://localhost/:param',
-    MATCHES_WITH_PARAMS({ param: 'path#section' }),
+    MATCHES_WITH_PARAMS({ param: 'path' }),
   ],
 
   /* Optional path parameter (?) */
