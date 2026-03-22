@@ -33,9 +33,9 @@ npm i @msw/url
 
 ## API
 
-### `matchPattern(input, pattern)`
+### `matchPattern(pattern, input)`
 
-Matches a URL against the given pattern.
+Match a patteern against the given URL.
 
 ```ts
 import { matchPattern } from '@msw/url'
@@ -57,11 +57,11 @@ The pattern is the source of truth. If it ends with a trailing slash, then the i
 ```ts
 // No trailing slash in the pattern? Ignore it.
 matchPattern('/api', '/api') // ✅
-matchPattern('/api/', '/api') // ✅
+matchPattern('/api', '/api/') // ✅
 
 // Trailing slash in the pattern? It's required.
 matchPattern('/api/', '/api/') // ✅
-matchPattern('/api', '/api/') // ❌
+matchPattern('/api/', '/api') // ❌
 ```
 
 > This is to accommodate to JavaScript developers not being used to providing trailing slashes.
@@ -69,7 +69,7 @@ matchPattern('/api', '/api/') // ❌
 #### Path parameters
 
 ```ts
-matchPattern('/user/123', '/user/:userId')
+matchPattern('/user/:userId', '/user/123')
 // { matches: true, params: { userId: '123' } }
 ```
 
@@ -78,43 +78,43 @@ matchPattern('/user/123', '/user/:userId')
 ##### Optional parameters
 
 ```ts
-matchPattern('/user/', '/user/:userId?')
+matchPattern('/user/:userId?', '/user/')
 // { matches: true, params: {} }
 
-matchPattern('/user/123', '/user/:userId?')
+matchPattern('/user/:userId?', '/user/123')
 // { matches: true, params: { userId: '123' } }
 ```
 
 ##### Splat parameters
 
 ```ts
-matchPattern('/user/', '/user/:userId*')
+matchPattern('/user/:userId*', '/user/')
 // { matches: true, params: {} }
 
-matchPattern('/user/123', '/user/:userId*')
+matchPattern('/user/:userId*', '/user/123')
 // { matches: true, params: { userId: '123' } }
 
-matchPattern('/user/123/messages', '/user/:userId*')
+matchPattern('/user/:userId*', '/user/123/messages')
 // { matches: true, params: { userId: '123/messages' } }
 ```
 
 ##### One-or-more parameters
 
 ```ts
-matchPattern('/user/', '/user/:userId+')
+matchPattern('/user/:userId+', '/user/')
 // { matches: false }
 
-matchPattern('/user/123', '/user/:userId+')
+matchPattern('/user/:userId+', '/user/123')
 // { matches: true, params: { userId: '123' } }
 
-matchPattern('/user/123/messages', '/user/:userId+')
+matchPattern('/user/:userId+', '/user/123/messages')
 // { matches: true, params: { userId: '123/messages' } }
 ```
 
 #### Wildcards
 
 ```ts
-matchPattern('http://acme.com/user/123', 'http://*.com/user/*')
+matchPattern('http://*.com/user/*', 'http://acme.com/user/123')
 // { matches: true, params: { '0': 'acme', '1': '123' } }
 ```
 
@@ -123,14 +123,14 @@ matchPattern('http://acme.com/user/123', 'http://*.com/user/*')
 A slash preceding a wildcard is not a part of the wildcard and is _required_:
 
 ```ts
-matchPattern('/user/', '/user/*') // ✅ { params: { '0': ''} }
-matchPattern('/user', '/user/*') // ❌
+matchPattern('/user/*', '/user/') // ✅ { params: { '0': ''} }
+matchPattern('/user/*', '/user') // ❌
 ```
 
 #### Encoded URL segments
 
 ```ts
-matchPattern('/%E4%B8%AD%E6%96%87', '/:name')
+matchPattern('/:name', '/%E4%B8%AD%E6%96%87')
 // { matches: true, params: { name: '中文' } }
 ```
 

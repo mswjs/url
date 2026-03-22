@@ -51,7 +51,7 @@ describe('single param', () => {
   const urlPattern = new URLPattern({ pathname: pattern })
 
   bench('matchPattern', () => {
-    matchPattern(input, pattern)
+    matchPattern(pattern, input)
   })
 
   bench('path-to-regexp', () => {
@@ -79,7 +79,7 @@ describe('multiple params', () => {
   const urlPattern = new URLPattern({ pathname: pattern })
 
   bench('matchPattern', () => {
-    matchPattern(input, pattern)
+    matchPattern(pattern, input)
   })
 
   bench('path-to-regexp', () => {
@@ -106,7 +106,7 @@ describe('param with extension', () => {
   const urlPattern = new URLPattern({ pathname: pattern })
 
   bench('matchPattern', () => {
-    matchPattern(input, pattern)
+    matchPattern(pattern, input)
   })
 
   bench('path-to-regexp', () => {
@@ -130,7 +130,7 @@ describe('non-match (miss)', () => {
   const urlPattern = new URLPattern({ pathname: pattern })
 
   bench('matchPattern', () => {
-    matchPattern(input, pattern)
+    matchPattern(pattern, input)
   })
 
   bench('path-to-regexp', () => {
@@ -158,7 +158,7 @@ describe('deeply nested params', () => {
   const urlPattern = new URLPattern({ pathname: pattern })
 
   bench('matchPattern', () => {
-    matchPattern(input, pattern)
+    matchPattern(pattern, input)
   })
 
   bench('path-to-regexp', () => {
@@ -208,7 +208,7 @@ describe('full URL: single param', () => {
   const urlPattern = new URLPattern(pattern)
 
   bench('matchPattern', () => {
-    matchPattern(input, pattern)
+    matchPattern(pattern, input)
   })
 
   bench('route-pattern', () => {
@@ -228,7 +228,7 @@ describe('full URL: multiple params', () => {
   const urlPattern = new URLPattern(pattern)
 
   bench('matchPattern', () => {
-    matchPattern(input, pattern)
+    matchPattern(pattern, input)
   })
 
   bench('route-pattern', () => {
@@ -248,7 +248,7 @@ describe('full URL: non-match (miss)', () => {
   const urlPattern = new URLPattern(pattern)
 
   bench('matchPattern', () => {
-    matchPattern(input, pattern)
+    matchPattern(pattern, input)
   })
 
   bench('route-pattern', () => {

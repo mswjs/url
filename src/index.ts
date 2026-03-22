@@ -429,8 +429,8 @@ function decode(value: string): string {
  * // { matches: true, params: { userId: '123' } }
  */
 export function matchPattern(
-  input: MatchPatternInput,
   pattern: string,
+  input: MatchPatternInput,
 ): MatchResult {
   const rawInput = typeof input === 'string' ? input : input.href
 
