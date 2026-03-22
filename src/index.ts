@@ -6,7 +6,7 @@ export interface MatchResult {
 export type MatchPatternInput = string | URL
 export type MatchPatternParams = Record<string, string | Array<string>>
 
-const AMPERSAND = 42
+const ASTERISK = 42
 const SLASH = 47
 const COLON = 58
 const QUESTION_MARK = 63
@@ -102,7 +102,7 @@ function parsePattern(pattern: string): Array<Token> {
       // Escaped character — consume the backslash and the next character
       // as a literal. Fall through to the literal branch below by not
       // advancing `i` here (the literal branch handles it).
-    } else if (code === AMPERSAND) {
+    } else if (code === ASTERISK) {
       tokens.push({
         type: TokenType.Wildcard,
         nextLiteral: undefined,
@@ -126,7 +126,7 @@ function parsePattern(pattern: string): Array<Token> {
       if (i < length) {
         const mod = pattern.charCodeAt(i)
 
-        if (mod === QUESTION_MARK || mod === PLUS || mod === AMPERSAND) {
+        if (mod === QUESTION_MARK || mod === PLUS || mod === ASTERISK) {
           modifier = pattern[i] as '?' | '+' | '*'
           i++
         }
@@ -156,7 +156,7 @@ function parsePattern(pattern: string): Array<Token> {
         continue
       }
 
-      if (charCode === AMPERSAND) {
+      if (charCode === ASTERISK) {
         break
       }
 
