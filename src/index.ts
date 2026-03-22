@@ -30,6 +30,7 @@ type Token =
       nextLiteral: string | undefined
     }
 
+const MAX_INPUT_LENGTH = 8192
 const PATTERN_CACHE_LIMIT = 1000
 const PATTERN_CACHE = new Map<string, ParsedPattern>()
 const NO_MATCH: MatchResult = Object.freeze({
@@ -431,9 +432,15 @@ export function matchPattern(
   input: MatchPatternInput,
   pattern: string,
 ): MatchResult {
-  let inputString = removeQueryAndFragment(
-    typeof input === 'string' ? input : input.href,
-  )
+  const rawInput = typeof input === 'string' ? input : input.href
+
+  if (rawInput.length > MAX_INPUT_LENGTH) {
+    throw new Error(
+      `matchPattern: input URL exceeds the maximum allowed length of ${MAX_INPUT_LENGTH} characters (received ${rawInput.length}).`,
+    )
+  }
+
+  let inputString = removeQueryAndFragment(rawInput)
 
   const { tokens, isLiteralOnly, hasTrailingSlash } =
     parsePatternOrGetFromCache(pattern)
