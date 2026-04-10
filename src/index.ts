@@ -13,6 +13,8 @@ const QUESTION_MARK = 63
 const PLUS = 43
 const BACKSLASH = 92
 const UNDERSCORE = 95
+const OPEN_BRACKET = 91
+const CLOSE_BRACKET = 93
 
 const enum TokenType {
   Literal,
@@ -95,6 +97,12 @@ function parsePattern(pattern: string): Array<Token> {
   const tokens: Array<Token> = []
   let i = 0
   const length = pattern.length
+  // Tracks whether the cursor is inside a `[...]` group, used for IPv6
+  // host literals like `http://[2001:db8::1]/path`. Inside brackets,
+  // `:` and `*` are treated as literal characters so that hextets
+  // beginning with hex letters (e.g. `:db8`) are not mis-parsed as
+  // path parameters.
+  let inBrackets = false
 
   while (i < length) {
     const code = pattern.charCodeAt(i)
@@ -103,7 +111,7 @@ function parsePattern(pattern: string): Array<Token> {
       // Escaped character — consume the backslash and the next character
       // as a literal. Fall through to the literal branch below by not
       // advancing `i` here (the literal branch handles it).
-    } else if (code === ASTERISK) {
+    } else if (code === ASTERISK && !inBrackets) {
       tokens.push({
         type: TokenType.Wildcard,
         nextLiteral: undefined,
@@ -112,6 +120,7 @@ function parsePattern(pattern: string): Array<Token> {
       continue
     } else if (
       code === COLON &&
+      !inBrackets &&
       i + 1 < length &&
       isIdentStartCode(pattern.charCodeAt(i + 1))
     ) {
@@ -157,12 +166,25 @@ function parsePattern(pattern: string): Array<Token> {
         continue
       }
 
-      if (charCode === ASTERISK) {
+      if (charCode === OPEN_BRACKET) {
+        inBrackets = true
+        i++
+        continue
+      }
+
+      if (charCode === CLOSE_BRACKET) {
+        inBrackets = false
+        i++
+        continue
+      }
+
+      if (charCode === ASTERISK && !inBrackets) {
         break
       }
 
       if (
         charCode === COLON &&
+        !inBrackets &&
         i + 1 < length &&
         isIdentStartCode(pattern.charCodeAt(i + 1))
       ) {
