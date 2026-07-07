@@ -123,7 +123,7 @@ matchPattern('http://*.com/user/*', 'http://acme.com/user/123')
 A slash preceding a wildcard is not a part of the wildcard and is _required_:
 
 ```ts
-matchPattern('/user/*', '/user/') // ✅ { params: { '0': ''} }
+matchPattern('/user/*', '/user/') // ✅
 matchPattern('/user/*', '/user') // ❌
 ```
 
