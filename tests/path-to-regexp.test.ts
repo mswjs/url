@@ -39,7 +39,11 @@ it.each([
   ['/:test.json', '/.json', NO_MATCH],
   ['/:test.json', '/test.json', MATCHES_WITH_PARAMS({ test: 'test' })],
   ['/:test.json', '/route.json', MATCHES_WITH_PARAMS({ test: 'route' })],
-  ['/:test.json', '/route.json.json', NO_MATCH],
+  [
+    '/:test.json',
+    '/route.json.json',
+    MATCHES_WITH_PARAMS({ test: 'route.json' }),
+  ],
 
   /* Format and path params */
   [

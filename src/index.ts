@@ -36,6 +36,12 @@ type Token =
 
 const MAX_INPUT_LENGTH = 8192
 const PATTERN_CACHE_LIMIT = 1000
+// Backtracking step budget per match. Realistic pattern/input pairs
+// resolve in well under a hundred steps; only adversarial inputs
+// (e.g. dozens of wildcards over thousands of near-matching
+// characters) exhaust it, in which case the match bails out and
+// reports no match instead of degrading to quadratic time.
+const MAX_MATCH_STEPS = 100_000
 const PATTERN_CACHE = new Map<string, ParsedPattern>()
 const NO_MATCH: MatchResult = Object.freeze({
   matches: false,
@@ -363,23 +369,323 @@ function findEncodedLiteralEnd(
   return -1
 }
 
-function matchTokens(
+// Matcher state, kept at module scope so a match doesn't allocate
+// closures or scratch arrays per call. Matching is synchronous and
+// non-reentrant, so reusing this state across calls is safe.
+let matcherInput = ''
+let matcherInputLength = 0
+let matcherTokens: Array<Token> = []
+let matcherTokenCount = 0
+let matcherTolerateTrailingSlash = false
+let matcherParams: MatchPatternParams | undefined
+let matcherRemainingSteps = 0
+
+// (tokenIndex, position) states that already failed. Pruning them
+// keeps backtracking polynomial on pathological inputs instead of
+// exponential, which is the vulnerability RegExp-based matchers
+// are prone to. Allocated lazily — most matches never backtrack.
+let matcherFailedStates: Set<number> | undefined
+
+// Wildcard/param bindings along the current match path, as parallel
+// arrays to avoid allocating an object per attempted binding. Params
+// are materialized from these only once the whole pattern matches.
+const matcherBoundTokens: Array<Token> = []
+const matcherBoundStarts: Array<number> = []
+const matcherBoundEnds: Array<number> = []
+
+function finalizeMatch(): boolean {
+  const params = Object.create(null) as MatchPatternParams
+  let wildcardIndex = 0
+
+  for (let i = 0; i < matcherBoundTokens.length; i++) {
+    const token = matcherBoundTokens[i]
+    const start = matcherBoundStarts[i]
+    const end = matcherBoundEnds[i]
+
+    if (token.type === TokenType.Wildcard) {
+      if (start !== end) {
+        params[String(wildcardIndex)] = decode(
+          matcherInput.slice(start, end),
+        )
+      }
+      wildcardIndex++
+      continue
+    }
+
+    if (token.type !== TokenType.Param || start === end) {
+      continue
+    }
+
+    const captured = decode(matcherInput.slice(start, end))
+    const existing = params[token.name]
+
+    if (existing === undefined) {
+      params[token.name] = captured
+    } else if (Array.isArray(existing)) {
+      existing.push(captured)
+    } else {
+      params[token.name] = [existing, captured]
+    }
+  }
+
+  matcherParams = params
+  return true
+}
+
+function bindAndContinue(
+  token: Token,
+  tokenIndex: number,
+  start: number,
+  end: number,
+): boolean {
+  matcherBoundTokens.push(token)
+  matcherBoundStarts.push(start)
+  matcherBoundEnds.push(end)
+
+  if (matchFrom(tokenIndex + 1, end)) {
+    return true
+  }
+
+  matcherBoundTokens.pop()
+  matcherBoundStarts.pop()
+  matcherBoundEnds.pop()
+
+  return false
+}
+
+function matchLiteral(
+  token: Extract<Token, { type: TokenType.Literal }>,
+  tokenIndex: number,
+  position: number,
+): boolean {
+  const value = token.value
+
+  if (matcherInput.startsWith(value, position)) {
+    if (matchFrom(tokenIndex + 1, position + value.length)) {
+      return true
+    }
+  } else if (matcherInput.indexOf('%', position) !== -1) {
+    // The input may be URL-encoded. Try decoding the corresponding
+    // input segment to see if it matches the literal. Only attempt
+    // this when the remaining input contains a '%'.
+    const encodedLength = findEncodedLiteralEnd(matcherInput, position, value)
+
+    if (
+      encodedLength !== -1 &&
+      matchFrom(tokenIndex + 1, position + encodedLength)
+    ) {
+      return true
+    }
+  }
+
+  // A literal ending with '/' followed by an optional/zero-or-more
+  // param: the slash belongs to the optional group. Try consuming
+  // the literal without it and binding the param empty. This allows
+  // `/users/:id?` to match `/users` and `/a/:p?/:p` to match `/a/x`.
+  if (
+    value.length > 0 &&
+    value.charCodeAt(value.length - 1) === SLASH &&
+    tokenIndex + 1 < matcherTokenCount
+  ) {
+    const nextToken = matcherTokens[tokenIndex + 1]
+
+    if (
+      nextToken.type === TokenType.Param &&
+      (nextToken.modifier === '?' || nextToken.modifier === '*')
+    ) {
+      const trimmedValue = value.slice(0, -1)
+
+      if (
+        matcherInput.startsWith(trimmedValue, position) &&
+        matchFrom(tokenIndex + 2, position + trimmedValue.length)
+      ) {
+        return true
+      }
+    }
+  }
+
+  return false
+}
+
+function matchParamOrWildcard(
+  token: Exclude<Token, { type: TokenType.Literal }>,
+  tokenIndex: number,
+  position: number,
+): boolean {
+  const nextLiteralValue = token.nextLiteral
+  // Params without + or * modifiers are segment-scoped (stop at '/').
+  const isSegmentScoped =
+    token.type === TokenType.Param &&
+    token.modifier !== '+' &&
+    token.modifier !== '*'
+  const allowEmpty =
+    token.type === TokenType.Wildcard ||
+    token.modifier === '?' ||
+    token.modifier === '*'
+
+  let boundary: number
+
+  if (isSegmentScoped) {
+    const slashIndex = matcherInput.indexOf('/', position)
+    boundary = slashIndex === -1 ? matcherInputLength : slashIndex
+  } else {
+    boundary = matcherInputLength
+  }
+
+  if (nextLiteralValue === undefined) {
+    // No literal follows this token anywhere in the pattern.
+    if (tokenIndex === matcherTokenCount - 1) {
+      // Last token — it either consumes everything up to the
+      // boundary or nothing does.
+      if (!allowEmpty && position === boundary) {
+        return false
+      }
+
+      return bindAndContinue(token, tokenIndex, position, boundary)
+    }
+
+    // Only params/wildcards follow. Try every end position,
+    // shortest first.
+    for (let end = position; end <= boundary; end++) {
+      if (!allowEmpty && end === position) {
+        continue
+      }
+
+      if (bindAndContinue(token, tokenIndex, position, end)) {
+        return true
+      }
+    }
+
+    return false
+  }
+
+  // A literal follows this token. Try each occurrence of it,
+  // leftmost first, then fall back to an empty capture for
+  // optional tokens.
+  let searchFrom = position
+  let triedEmptyCapture = false
+
+  while (true) {
+    const occurrenceIndex = matcherInput.indexOf(nextLiteralValue, searchFrom)
+
+    if (occurrenceIndex === -1 || occurrenceIndex > boundary) {
+      break
+    }
+
+    if (occurrenceIndex === position) {
+      triedEmptyCapture = true
+    }
+
+    if (allowEmpty || occurrenceIndex !== position) {
+      if (bindAndContinue(token, tokenIndex, position, occurrenceIndex)) {
+        return true
+      }
+    }
+
+    searchFrom = occurrenceIndex + 1
+  }
+
+  if (allowEmpty && !triedEmptyCapture) {
+    return bindAndContinue(token, tokenIndex, position, position)
+  }
+
+  return false
+}
+
+function matchFrom(tokenIndex: number, position: number): boolean {
+  if (matcherRemainingSteps === 0) {
+    return false
+  }
+
+  matcherRemainingSteps--
+
+  if (tokenIndex === matcherTokenCount) {
+    const unconsumed = matcherInputLength - position
+
+    // If the pattern doesn't end with '/', tolerate a trailing slash
+    // in the input that wasn't consumed by any token.
+    if (
+      unconsumed === 0 ||
+      (matcherTolerateTrailingSlash &&
+        unconsumed === 1 &&
+        matcherInput.charCodeAt(position) === SLASH)
+    ) {
+      return finalizeMatch()
+    }
+
+    return false
+  }
+
+  const stateKey = tokenIndex * (matcherInputLength + 1) + position
+
+  if (matcherFailedStates !== undefined && matcherFailedStates.has(stateKey)) {
+    return false
+  }
+
+  const token = matcherTokens[tokenIndex]
+  const matched =
+    token.type === TokenType.Literal
+      ? matchLiteral(token, tokenIndex, position)
+      : matchParamOrWildcard(token, tokenIndex, position)
+
+  if (!matched) {
+    if (matcherFailedStates === undefined) {
+      matcherFailedStates = new Set()
+    }
+
+    matcherFailedStates.add(stateKey)
+  }
+
+  return matched
+}
+
+/**
+ * Single linear pass that binds every wildcard/param to the same first
+ * candidate the backtracking matcher would try. Returns a MatchResult
+ * when it can conclude on its own, or `undefined` when it failed past
+ * a point where untried alternatives exist and backtracking is needed.
+ */
+function matchTokensLinear(
   inputString: string,
   tokens: Array<Token>,
   tolerateTrailingSlash: boolean,
-): MatchResult {
+): MatchResult | undefined {
   const inputLength = inputString.length
+  const totalTokens = tokens.length
 
   let position = 0
   let wildcardIndex = 0
+  // Whether any consumed token had another candidate to try. Failing
+  // with no alternatives behind us is a definitive no-match.
+  let hasAlternatives = false
   const params = Object.create(null) as MatchPatternParams
 
-  for (let i = 0; i < tokens.length; i++) {
+  for (let i = 0; i < totalTokens; i++) {
     const token = tokens[i]
 
     if (token.type === TokenType.Literal) {
-      if (inputString.startsWith(token.value, position)) {
-        position += token.value.length
+      const value = token.value
+
+      // A literal ending with '/' followed by an optional/zero-or-more
+      // param can alternatively be consumed without the slash, binding
+      // the param empty (see matchLiteral).
+      let hasTrimAlternative = false
+
+      if (
+        value.charCodeAt(value.length - 1) === SLASH &&
+        i + 1 < totalTokens
+      ) {
+        const nextToken = tokens[i + 1]
+        hasTrimAlternative =
+          nextToken.type === TokenType.Param &&
+          (nextToken.modifier === '?' || nextToken.modifier === '*')
+      }
+
+      if (inputString.startsWith(value, position)) {
+        if (hasTrimAlternative) {
+          hasAlternatives = true
+        }
+        position += value.length
         continue
       }
 
@@ -390,37 +696,30 @@ function matchTokens(
         const encodedLength = findEncodedLiteralEnd(
           inputString,
           position,
-          token.value,
+          value,
         )
 
         if (encodedLength !== -1) {
+          if (hasTrimAlternative) {
+            hasAlternatives = true
+          }
           position += encodedLength
           continue
         }
       }
 
-      // If this literal ends with '/' and the only remaining token is
-      // an optional/zero-or-more param, try matching without the trailing
-      // slash. This allows `/users` to match pattern `/users/:id?`.
-      if (
-        token.value.charCodeAt(token.value.length - 1) === SLASH &&
-        i + 1 === tokens.length - 1
-      ) {
-        const nextToken = tokens[i + 1]
-        if (
-          nextToken.type === TokenType.Param &&
-          (nextToken.modifier === '?' || nextToken.modifier === '*')
-        ) {
-          const trimmed = token.value.slice(0, -1)
-          if (inputString.startsWith(trimmed, position)) {
-            position += trimmed.length
-            i++
-            continue
-          }
+      if (hasTrimAlternative) {
+        const trimmedValue = value.slice(0, -1)
+
+        if (inputString.startsWith(trimmedValue, position)) {
+          position += trimmedValue.length
+          // Bind the optional param empty.
+          i++
+          continue
         }
       }
 
-      return NO_MATCH
+      return hasAlternatives ? undefined : NO_MATCH
     }
 
     // Wildcard or param — use precomputed nextLiteral.
@@ -430,46 +729,64 @@ function matchTokens(
       token.type === TokenType.Param &&
       token.modifier !== '+' &&
       token.modifier !== '*'
+    const allowEmpty =
+      token.type === TokenType.Wildcard ||
+      token.modifier === '?' ||
+      token.modifier === '*'
+
+    let boundary: number
+
+    if (isSegmentScoped) {
+      const slashIndex = inputString.indexOf('/', position)
+      boundary = slashIndex === -1 ? inputLength : slashIndex
+    } else {
+      boundary = inputLength
+    }
+
     let endPosition: number
 
     if (nextLiteralValue === undefined) {
-      if (isSegmentScoped) {
-        const slashIndex = inputString.indexOf('/', position)
-        endPosition = slashIndex === -1 ? inputLength : slashIndex
+      // No literal follows this token anywhere in the pattern.
+      if (i === totalTokens - 1) {
+        // Last token — it either consumes everything up to the
+        // boundary or nothing does.
+        if (!allowEmpty && position === boundary) {
+          return hasAlternatives ? undefined : NO_MATCH
+        }
+
+        endPosition = boundary
       } else {
-        endPosition = inputLength
+        // Only params/wildcards follow. Shortest capture first.
+        endPosition = allowEmpty ? position : position + 1
+
+        if (endPosition > boundary) {
+          return hasAlternatives ? undefined : NO_MATCH
+        }
+
+        if (endPosition < boundary) {
+          hasAlternatives = true
+        }
       }
     } else {
-      const idx = inputString.indexOf(nextLiteralValue, position)
+      let occurrenceIndex = inputString.indexOf(nextLiteralValue, position)
 
-      if (idx === -1) {
-        if (
-          token.type === TokenType.Param &&
-          (token.modifier === '?' || token.modifier === '*')
-        ) {
-          endPosition = position
-        } else {
-          return NO_MATCH
-        }
-      } else if (isSegmentScoped && nextLiteralValue.charCodeAt(0) !== SLASH) {
-        // Only check for '/' when the next literal doesn't already
-        // start with '/' — if it does, indexOf(nextLiteral) already
-        // found the segment boundary.
-        const slashIndex = inputString.indexOf('/', position)
-        endPosition = slashIndex === -1 || slashIndex >= idx ? idx : slashIndex
-      } else {
-        endPosition = idx
+      if (!allowEmpty && occurrenceIndex === position) {
+        occurrenceIndex = inputString.indexOf(nextLiteralValue, position + 1)
       }
-    }
 
-    // Check emptiness before allocating the captured substring.
-    const allowEmpty =
-      token.type === TokenType.Wildcard ||
-      (token.type === TokenType.Param &&
-        (token.modifier === '?' || token.modifier === '*'))
+      if (occurrenceIndex === -1 || occurrenceIndex > boundary) {
+        if (!allowEmpty) {
+          return hasAlternatives ? undefined : NO_MATCH
+        }
 
-    if (!allowEmpty && position === endPosition) {
-      return NO_MATCH
+        // Empty capture — the last alternative for optional tokens.
+        endPosition = position
+      } else {
+        endPosition = occurrenceIndex
+        // Later occurrences (or the empty fallback) may exist;
+        // checking precisely costs another scan, so assume so.
+        hasAlternatives = true
+      }
     }
 
     if (token.type === TokenType.Wildcard) {
@@ -483,14 +800,12 @@ function matchTokens(
       const captured = decode(inputString.slice(position, endPosition))
       const existing = params[token.name]
 
-      if (existing !== undefined) {
-        if (Array.isArray(existing)) {
-          existing.push(captured)
-        } else {
-          params[token.name] = [existing, captured]
-        }
-      } else {
+      if (existing === undefined) {
         params[token.name] = captured
+      } else if (Array.isArray(existing)) {
+        existing.push(captured)
+      } else {
+        params[token.name] = [existing, captured]
       }
     }
 
@@ -501,21 +816,59 @@ function matchTokens(
   // in the input that wasn't consumed by any token.
   const unconsumed = inputLength - position
 
-  if (unconsumed > 0) {
-    if (
+  if (
+    unconsumed !== 0 &&
+    !(
       tolerateTrailingSlash &&
       unconsumed === 1 &&
       inputString.charCodeAt(position) === SLASH
-    ) {
-      // Trailing slash — accepted.
-    } else {
-      return NO_MATCH
-    }
+    )
+  ) {
+    return hasAlternatives ? undefined : NO_MATCH
   }
 
   return {
     matches: true,
     params,
+  }
+}
+
+function matchTokens(
+  inputString: string,
+  tokens: Array<Token>,
+  tolerateTrailingSlash: boolean,
+): MatchResult {
+  const linearResult = matchTokensLinear(
+    inputString,
+    tokens,
+    tolerateTrailingSlash,
+  )
+
+  if (linearResult !== undefined) {
+    return linearResult
+  }
+
+  matcherInput = inputString
+  matcherInputLength = inputString.length
+  matcherTokens = tokens
+  matcherTokenCount = tokens.length
+  matcherTolerateTrailingSlash = tolerateTrailingSlash
+  matcherParams = undefined
+  matcherRemainingSteps = MAX_MATCH_STEPS
+  matcherFailedStates = undefined
+  matcherBoundTokens.length = 0
+  matcherBoundStarts.length = 0
+  matcherBoundEnds.length = 0
+
+  matchFrom(0, 0)
+
+  if (matcherParams === undefined) {
+    return NO_MATCH
+  }
+
+  return {
+    matches: true,
+    params: matcherParams,
   }
 }
 
