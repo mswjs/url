@@ -21,7 +21,7 @@ I need a reliable and performant path matching library for Mock Service Worker. 
   - 👎 Does not support relative URLs;
   - 👎 Heavily designed around framework routing.
 
-I've been using `path-to-regexp` for years now, but it's rather painful to update as it introduces breaking changes in behaviors that I cannot directly propagate to my users, and sitting on older versions is a potential security vulnerability waiting to happen. The standard APIs are so slow they shouldn't be used by anyone, to begin with, and the modern libraries design around their priorities, which aren't always benefitial to me.
+I've been using `path-to-regexp` for years now, but it's rather painful to update as it introduces breaking changes in behaviors that I cannot directly propagate to my users, and sitting on older versions is a potential security vulnerability waiting to happen. The standard APIs are so slow they shouldn't be used by anyone, to begin with, and the modern libraries design around their priorities, which aren't always beneficial to me.
 
 **This library isn't an answer to any downsides of the existing solutions**. I built it for myself, plan to use it myself. I don't endorse or recommend you use it.
 
@@ -35,13 +35,13 @@ npm i @msw/url
 
 ### `matchPattern(pattern, input)`
 
-Match a patteern against the given URL.
+Match a pattern against the given URL.
 
 ```ts
 import { matchPattern } from '@msw/url'
 ```
 
-`matchPattern` uses token-based comparision to completely forego regular expressions, which should, technically, make it more performant and less prone to vulnerabilities. Doesn't promise full feature parity with `path-to-regexp` but currently uses its test suite as the compliance bar.
+`matchPattern` uses token-based comparison to completely forego regular expressions, which should, technically, make it more performant and less prone to vulnerabilities. Doesn't promise full feature parity with `path-to-regexp` but currently uses its test suite as the compliance bar.
 
 #### Absolute and relative URLs
 
@@ -64,7 +64,7 @@ matchPattern('/api/', '/api/') // ✅
 matchPattern('/api/', '/api') // ❌
 ```
 
-> This is to accommodate to JavaScript developers not being used to providing trailing slashes.
+> This is to accommodate JavaScript developers not being used to providing trailing slashes.
 
 #### Path parameters
 
