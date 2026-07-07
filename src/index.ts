@@ -15,6 +15,8 @@ const BACKSLASH = 92
 const UNDERSCORE = 95
 const OPEN_BRACKET = 91
 const CLOSE_BRACKET = 93
+const UPPERCASE_A = 65
+const UPPERCASE_Z = 90
 
 const enum TokenType {
   Literal,
@@ -56,14 +58,115 @@ interface ParsedPattern {
   tokens: Array<Token>
   isLiteralOnly: boolean
   hasTrailingSlash: boolean
+  normalizedPattern: string
+}
+
+/**
+ * Lowercase the case-insensitive parts of a URL — the scheme and
+ * the host. Applies to both patterns and inputs so that
+ * `http://EXAMPLE.com` matches `http://example.com`. The userinfo
+ * (`user:pass@`), the path, and `:param` names within the host are
+ * case-sensitive and preserved as-is.
+ */
+function lowercaseSchemeAndHost(url: string): string {
+  const schemeSeparatorIndex = url.indexOf('://')
+
+  if (schemeSeparatorIndex === -1) {
+    return url
+  }
+
+  // A '/' before '://' means the match is inside the path of a
+  // relative URL (e.g. `/redirect/http://example.com`) — no host.
+  const firstSlashIndex = url.indexOf('/')
+
+  if (firstSlashIndex !== schemeSeparatorIndex + 1) {
+    return url
+  }
+
+  const authorityStart = schemeSeparatorIndex + 3
+  let hostEnd = url.indexOf('/', authorityStart)
+
+  if (hostEnd === -1) {
+    hostEnd = url.length
+  }
+
+  // Skip the allocation when the scheme and host contain nothing to
+  // lowercase. Codes above 127 take the slow path so that non-ASCII
+  // hosts are lowercased via String#toLowerCase.
+  let needsLowercasing = false
+
+  for (let i = 0; i < hostEnd; i++) {
+    const code = url.charCodeAt(i)
+
+    if ((code >= UPPERCASE_A && code <= UPPERCASE_Z) || code > 127) {
+      needsLowercasing = true
+      break
+    }
+  }
+
+  if (!needsLowercasing) {
+    return url
+  }
+
+  const userinfoEnd = url.lastIndexOf('@', hostEnd - 1)
+
+  let result = ''
+  let plainStart = 0
+  let inBrackets = false
+  let i = 0
+
+  while (i < hostEnd) {
+    if (i === authorityStart && userinfoEnd >= authorityStart) {
+      // The userinfo is case-sensitive — copy it as-is.
+      result += url.slice(plainStart, i).toLowerCase()
+      result += url.slice(i, userinfoEnd + 1)
+      i = userinfoEnd + 1
+      plainStart = i
+      continue
+    }
+
+    const code = url.charCodeAt(i)
+
+    if (code === OPEN_BRACKET) {
+      inBrackets = true
+    } else if (code === CLOSE_BRACKET) {
+      inBrackets = false
+    } else if (
+      code === COLON &&
+      !inBrackets &&
+      i + 1 < hostEnd &&
+      isIdentStartCode(url.charCodeAt(i + 1))
+    ) {
+      // Parameter names are case-sensitive — copy them as-is.
+      result += url.slice(plainStart, i).toLowerCase()
+      const paramStart = i
+      i++
+
+      while (i < hostEnd && isIdentCharCode(url.charCodeAt(i))) {
+        i++
+      }
+
+      result += url.slice(paramStart, i)
+      plainStart = i
+      continue
+    }
+
+    i++
+  }
+
+  result += url.slice(plainStart, hostEnd).toLowerCase()
+  result += url.slice(hostEnd)
+
+  return result
 }
 
 function parsePatternOrGetFromCache(pattern: string): ParsedPattern {
   let parsed = PATTERN_CACHE.get(pattern)
 
   if (parsed === undefined) {
-    const tokens = parsePattern(pattern)
-    let isLiteralOnly = pattern.indexOf('\\') === -1
+    const normalizedPattern = lowercaseSchemeAndHost(pattern)
+    const tokens = parsePattern(normalizedPattern)
+    let isLiteralOnly = normalizedPattern.indexOf('\\') === -1
 
     for (let i = 0; isLiteralOnly && i < tokens.length; i++) {
       if (tokens[i].type !== TokenType.Literal) {
@@ -86,7 +189,7 @@ function parsePatternOrGetFromCache(pattern: string): ParsedPattern {
       PATTERN_CACHE.delete(PATTERN_CACHE.keys().next().value!)
     }
 
-    parsed = { tokens, isLiteralOnly, hasTrailingSlash }
+    parsed = { tokens, isLiteralOnly, hasTrailingSlash, normalizedPattern }
     PATTERN_CACHE.set(pattern, parsed)
   }
 
@@ -462,9 +565,9 @@ export function matchPattern(
     )
   }
 
-  let inputString = removeQueryAndFragment(rawInput)
+  const inputString = lowercaseSchemeAndHost(removeQueryAndFragment(rawInput))
 
-  const { tokens, isLiteralOnly, hasTrailingSlash } =
+  const { tokens, isLiteralOnly, hasTrailingSlash, normalizedPattern } =
     parsePatternOrGetFromCache(pattern)
 
   // Pure literal patterns are just a string equality check.
@@ -472,12 +575,15 @@ export function matchPattern(
   // When the pattern doesn't end with '/', also try with trailing
   // slash stripped from the input.
   if (isLiteralOnly) {
-    if (inputString === pattern || decode(inputString) === pattern) {
+    if (
+      inputString === normalizedPattern ||
+      decode(inputString) === normalizedPattern
+    ) {
       return { matches: true, params: Object.create(null) }
     }
     if (!hasTrailingSlash) {
       const stripped = removeTrailingSlash(inputString)
-      if (stripped === pattern || decode(stripped) === pattern) {
+      if (stripped === normalizedPattern || decode(stripped) === normalizedPattern) {
         return { matches: true, params: Object.create(null) }
       }
     }

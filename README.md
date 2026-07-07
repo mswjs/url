@@ -4,7 +4,7 @@ Utilities for working with URLs.
 
 ## Motivation
 
-I need a reliable and performant path matching library for Mock Service Worker. Here are my options right now:
+I need a reliable and performant path matching library for [Mock Service Worker](https://mswjs.io). Here are my options right now:
 
 - `URLPattern`
   - 👍 Standard API supported in the browser and Node.js;
