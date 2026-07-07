@@ -541,6 +541,21 @@ function matchParamOrWildcard(
         return false
       }
 
+      // A multi-segment param reaching the end of the input must
+      // not swallow a tolerated trailing slash — leave it to the
+      // final unconsumed-input check instead.
+      if (
+        token.type === TokenType.Param &&
+        !isSegmentScoped &&
+        matcherTolerateTrailingSlash &&
+        boundary > position &&
+        matcherInput.charCodeAt(boundary - 1) === SLASH &&
+        (allowEmpty || boundary - 1 > position) &&
+        bindAndContinue(token, tokenIndex, position, boundary - 1)
+      ) {
+        return true
+      }
+
       return bindAndContinue(token, tokenIndex, position, boundary)
     }
 
@@ -755,6 +770,21 @@ function matchTokensLinear(
         }
 
         endPosition = boundary
+
+        // A multi-segment param reaching the end of the input must
+        // not swallow a tolerated trailing slash — leave it to the
+        // final unconsumed-input check instead.
+        if (
+          token.type === TokenType.Param &&
+          !isSegmentScoped &&
+          tolerateTrailingSlash &&
+          boundary > position &&
+          inputString.charCodeAt(boundary - 1) === SLASH &&
+          (allowEmpty || boundary - 1 > position)
+        ) {
+          endPosition = boundary - 1
+          hasAlternatives = true
+        }
       } else {
         // Only params/wildcards follow. Shortest capture first.
         endPosition = allowEmpty ? position : position + 1
