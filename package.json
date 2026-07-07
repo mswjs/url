@@ -4,6 +4,7 @@
   "version": "0.1.1",
   "description": "Utilities for working with URLs.",
   "types": "./build/index.d.mts",
+  "sideEffects": false,
   "imports": {
     "#src/*": "./src/*",
     "#tests/*": "./tests/*"
