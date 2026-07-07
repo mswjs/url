@@ -447,7 +447,7 @@ function decode(value: string): string {
 /**
  * Match a URL against the given pattern.
  * @example
- * matchPattern('http://localhost/user/123', 'http://localhost/user/:userId')
+ * matchPattern('http://localhost/user/:userId', 'http://localhost/user/123')
  * // { matches: true, params: { userId: '123' } }
  */
 export function matchPattern(
