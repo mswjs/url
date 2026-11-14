@@ -26,12 +26,17 @@ const enum TokenType {
 
 type Token =
   | { type: TokenType.Literal; value: string }
-  | { type: TokenType.Wildcard; nextLiteral: string | undefined }
+  | {
+      type: TokenType.Wildcard
+      nextLiteral: string | undefined
+      nextLiteralWithoutSlash: string | undefined
+    }
   | {
       type: TokenType.Param
       name: string
       modifier: '' | '?' | '+' | '*'
       nextLiteral: string | undefined
+      nextLiteralWithoutSlash: string | undefined
     }
 
 const MAX_INPUT_LENGTH = 8192
@@ -224,6 +229,7 @@ function parsePattern(pattern: string): Array<Token> {
       tokens.push({
         type: TokenType.Wildcard,
         nextLiteral: undefined,
+        nextLiteralWithoutSlash: undefined,
       })
       i++
       continue
@@ -256,6 +262,7 @@ function parsePattern(pattern: string): Array<Token> {
         name,
         modifier,
         nextLiteral: undefined,
+        nextLiteralWithoutSlash: undefined,
       })
       continue
     }
@@ -323,18 +330,46 @@ function parsePattern(pattern: string): Array<Token> {
   // Precompute nextLiteral for each wildcard/param in a single backward pass
   // so the matching loop doesn't need to scan forward through tokens.
   let lastLiteral: string | undefined
+  // The same literal without its trailing slash, set only when that
+  // slash belongs to an optional/zero-or-more param that follows it
+  // (see matchLiteral).
+  let lastLiteralWithoutSlash: string | undefined
 
   for (let j = tokens.length - 1; j >= 0; j--) {
     const token = tokens[j]
 
     if (token.type === TokenType.Literal) {
       lastLiteral = token.value
+      lastLiteralWithoutSlash = hasOptionalTrailingSlash(tokens, j)
+        ? token.value.slice(0, -1)
+        : undefined
     } else {
       token.nextLiteral = lastLiteral
+      token.nextLiteralWithoutSlash = lastLiteralWithoutSlash
     }
   }
 
   return tokens
+}
+
+/**
+ * Check if the literal at the given index ends with a slash that
+ * belongs to the optional/zero-or-more param following it.
+ */
+function hasOptionalTrailingSlash(
+  tokens: Array<Token>,
+  literalIndex: number,
+): boolean {
+  const token = tokens[literalIndex]
+  const nextToken = tokens[literalIndex + 1]
+
+  return (
+    token.type === TokenType.Literal &&
+    token.value.charCodeAt(token.value.length - 1) === SLASH &&
+    nextToken !== undefined &&
+    nextToken.type === TokenType.Param &&
+    (nextToken.modifier === '?' || nextToken.modifier === '*')
+  )
 }
 
 /**
@@ -482,26 +517,49 @@ function matchLiteral(
   // param: the slash belongs to the optional group. Try consuming
   // the literal without it and binding the param empty. This allows
   // `/users/:id?` to match `/users` and `/a/:p?/:p` to match `/a/x`.
-  if (
-    value.length > 0 &&
-    value.charCodeAt(value.length - 1) === SLASH &&
-    tokenIndex + 1 < matcherTokenCount
-  ) {
-    const nextToken = matcherTokens[tokenIndex + 1]
+  if (hasOptionalTrailingSlash(matcherTokens, tokenIndex)) {
+    const trimmedValue = value.slice(0, -1)
 
     if (
-      nextToken.type === TokenType.Param &&
-      (nextToken.modifier === '?' || nextToken.modifier === '*')
+      matcherInput.startsWith(trimmedValue, position) &&
+      matchFrom(tokenIndex + 2, position + trimmedValue.length)
     ) {
-      const trimmedValue = value.slice(0, -1)
-
-      if (
-        matcherInput.startsWith(trimmedValue, position) &&
-        matchFrom(tokenIndex + 2, position + trimmedValue.length)
-      ) {
-        return true
-      }
+      return true
     }
+  }
+
+  return false
+}
+
+/**
+ * Try ending the token at each occurrence of the given literal
+ * between the position and the boundary, leftmost first.
+ */
+function matchUntilLiteral(
+  token: Exclude<Token, { type: TokenType.Literal }>,
+  tokenIndex: number,
+  position: number,
+  boundary: number,
+  literal: string,
+  allowEmpty: boolean,
+): boolean {
+  let searchFrom = position
+
+  while (searchFrom <= boundary) {
+    const occurrenceIndex = matcherInput.indexOf(literal, searchFrom)
+
+    if (occurrenceIndex === -1 || occurrenceIndex > boundary) {
+      break
+    }
+
+    if (
+      (allowEmpty || occurrenceIndex !== position) &&
+      bindAndContinue(token, tokenIndex, position, occurrenceIndex)
+    ) {
+      return true
+    }
+
+    searchFrom = occurrenceIndex + 1
   }
 
   return false
@@ -575,36 +633,40 @@ function matchParamOrWildcard(
   }
 
   // A literal follows this token. Try each occurrence of it,
-  // leftmost first, then fall back to an empty capture for
-  // optional tokens.
-  let searchFrom = position
-  let triedEmptyCapture = false
-
-  while (true) {
-    const occurrenceIndex = matcherInput.indexOf(nextLiteralValue, searchFrom)
-
-    if (occurrenceIndex === -1 || occurrenceIndex > boundary) {
-      break
-    }
-
-    if (occurrenceIndex === position) {
-      triedEmptyCapture = true
-    }
-
-    if (allowEmpty || occurrenceIndex !== position) {
-      if (bindAndContinue(token, tokenIndex, position, occurrenceIndex)) {
-        return true
-      }
-    }
-
-    searchFrom = occurrenceIndex + 1
+  // leftmost first.
+  if (
+    matchUntilLiteral(
+      token,
+      tokenIndex,
+      position,
+      boundary,
+      nextLiteralValue,
+      allowEmpty,
+    )
+  ) {
+    return true
   }
 
-  if (allowEmpty && !triedEmptyCapture) {
-    return bindAndContinue(token, tokenIndex, position, position)
+  // The literal's trailing slash may belong to an omitted optional
+  // param. Try each occurrence of the literal without that slash.
+  // This allows `/users/:id/:tab?` to match `/users/1`.
+  if (
+    token.nextLiteralWithoutSlash !== undefined &&
+    matchUntilLiteral(
+      token,
+      tokenIndex,
+      position,
+      boundary,
+      token.nextLiteralWithoutSlash,
+      allowEmpty,
+    )
+  ) {
+    return true
   }
 
-  return false
+  // Fall back to an empty capture for optional tokens.
+  // If already tried above, the failed state prunes it.
+  return allowEmpty && bindAndContinue(token, tokenIndex, position, position)
 }
 
 function matchFrom(tokenIndex: number, position: number): boolean {
@@ -684,17 +746,7 @@ function matchTokensLinear(
       // A literal ending with '/' followed by an optional/zero-or-more
       // param can alternatively be consumed without the slash, binding
       // the param empty (see matchLiteral).
-      let hasTrimAlternative = false
-
-      if (
-        value.charCodeAt(value.length - 1) === SLASH &&
-        i + 1 < totalTokens
-      ) {
-        const nextToken = tokens[i + 1]
-        hasTrimAlternative =
-          nextToken.type === TokenType.Param &&
-          (nextToken.modifier === '?' || nextToken.modifier === '*')
-      }
+      const hasTrimAlternative = hasOptionalTrailingSlash(tokens, i)
 
       if (inputString.startsWith(value, position)) {
         if (hasTrimAlternative) {
@@ -805,6 +857,12 @@ function matchTokensLinear(
       }
 
       if (occurrenceIndex === -1 || occurrenceIndex > boundary) {
+        // The literal may still match without its trailing slash
+        // (see matchParamOrWildcard). Leave that to backtracking.
+        if (token.nextLiteralWithoutSlash !== undefined) {
+          return undefined
+        }
+
         if (!allowEmpty) {
           return hasAlternatives ? undefined : NO_MATCH
         }
